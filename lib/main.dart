@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'core/app_router.dart';
 import 'firebase_options.dart';
 import 'logic/providers/auth_provider.dart';
 import 'logic/providers/report_provider.dart';
