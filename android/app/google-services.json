@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "148923167758",
+    "project_id": "inbodysimpletracker",
+    "storage_bucket": "inbodysimpletracker.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:148923167758:android:9408e1ec8660ae9af6f85f",
+        "android_client_info": {
+          "package_name": "com.example.inbodysimpletracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAyXEtEjt53gSVt3oFsPkjRl58OhTe4DjY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
