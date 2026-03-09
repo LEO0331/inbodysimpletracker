@@ -300,7 +300,7 @@ class _UploadPageState extends State<UploadPage> {
         child: Column(
           children: [
             Container(
-              height: 200,
+              height: 400,
               width: double.infinity,
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey),
@@ -349,40 +349,105 @@ class _UploadPageState extends State<UploadPage> {
     );
   }
 
+    // ✅ 1. 放大圖片預覽並優化顯示比例
   Widget _buildImagePreview() {
     if (_imageFile == null) {
-      return Image.asset("assets/images/sample_report.jpg", fit: BoxFit.cover);
+      return Container(
+        color: Colors.grey[200], // 淺灰色背景，讓圖片邊緣清晰
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Image.asset(
+              "assets/images/sample_report.jpg",
+              fit: BoxFit.contain, // 👈 改用 contain 確保長條形報告完整顯示
+              width: double.infinity,
+            ),
+            // 加入一個半透明的小標籤，提示這是範例
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  "SAMPLE",
+                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
     }
-    if (kIsWeb && _webImage != null) {
-      return Image.memory(_webImage!, fit: BoxFit.cover);
-    } else if (!kIsWeb) {
-      return Image.file(File(_imageFile!.path), fit: BoxFit.cover);
-    }
-    return const Center(child: Text("Failed to load preview."));
+    
+    // 選取圖片後的顯示
+    return Container(
+      color: Colors.black, // 選取圖片後使用黑色背景，更有專業感
+      child: kIsWeb && _webImage != null
+          ? Image.memory(_webImage!, fit: BoxFit.contain)
+          : !kIsWeb
+              ? Image.file(File(_imageFile!.path), fit: BoxFit.contain)
+              : const Center(child: Text("Failed to load preview.", style: TextStyle(color: Colors.white))),
+    );
   }
 
+  // ✅ 2. 優化數據顯示行 (加入色彩與間距)
   Widget _buildMetricTile(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.blue.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [Text(label, style: const TextStyle(fontWeight: FontWeight.bold)), Text(value)],
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.check_circle_outline, size: 16, color: Colors.blue),
+              const SizedBox(width: 8),
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+            ],
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: Colors.blue,
+            ),
+          )
+        ],
       ),
     );
   }
 
+  // ✅ 3. 手動輸入文字框 (維持原樣並優化外觀)
   Widget _buildManualTextField(TextEditingController controller, String label, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 16), // 增加間距
       child: TextField(
         controller: controller,
+        autofocus: true,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(icon),
-          border: const OutlineInputBorder(),
+          prefixIcon: Icon(icon, color: Colors.blue),
+          filled: true,
+          fillColor: Colors.grey[50],
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.blue, width: 2),
+          ),
         ),
       ),
     );
-  }
+  } 
 }

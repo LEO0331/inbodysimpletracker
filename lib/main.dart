@@ -7,6 +7,7 @@ import 'logic/providers/auth_provider.dart';
 import 'logic/providers/report_provider.dart';
 
 // 匯入所有需要的頁面
+import 'presentation/admin/admin_page.dart';
 import 'presentation/auth/home_page.dart';
 import 'presentation/auth/login_page.dart';
 import 'presentation/auth/signup_page.dart';
@@ -46,6 +47,7 @@ class MyApp extends StatelessWidget {
           '/signup': (context) => const SignupPage(),
           '/dashboard': (context) => const DashboardPage(),
           '/upload': (context) => const UploadPage(),
+          '/admin': (context) => const AdminPage(),
         },
       ),
     );
