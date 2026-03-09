@@ -174,7 +174,9 @@ class _UploadPageState extends State<UploadPage> {
 
   @override
   void dispose() {
-    textRecognizer.close();
+    if (!kIsWeb) {
+      textRecognizer.close();
+    }
     super.dispose();
   }
 
@@ -253,7 +255,10 @@ class _UploadPageState extends State<UploadPage> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [Text(label, style: const TextStyle(fontWeight: FontWeight.bold)), Text(value)],
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text(value),
+        ],
       ),
     );
   }
