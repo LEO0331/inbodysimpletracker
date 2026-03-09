@@ -1,11 +1,12 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:developer' as developer;
 
-import '../auth/login_page.dart';
 import '../../logic/providers/auth_provider.dart';
 import '../../data/models/inbody_report.dart';
 
@@ -17,47 +18,123 @@ class UploadPage extends StatefulWidget {
 }
 
 class _UploadPageState extends State<UploadPage> {
-  File? _selectedImage;
+  XFile? _imageFile;
+  Uint8List? _webImage;
   String _extractedText = "";
   Map<String, dynamic> _parsedMetrics = {};
 
   final ImagePicker _picker = ImagePicker();
   final textRecognizer = TextRecognizer();
 
+  // 1. 選擇圖片與平台判斷邏輯
   Future<void> _pickImage() async {
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      setState(() {
-        _selectedImage = File(pickedFile.path);
-      });
-      await _processImage(_selectedImage!);
+      if (kIsWeb) {
+        final bytes = await pickedFile.readAsBytes();
+        setState(() {
+          _webImage = bytes;
+          _imageFile = pickedFile;
+          _extractedText = "The web platform does not currently support automatic recognition. Please click the button below to manually enter the data.";
+        });
+        // Web 直接彈出輸入視窗
+        _showManualInputDialog();
+      } else {
+        setState(() {
+          _imageFile = pickedFile;
+        });
+        await _processImage(pickedFile);
+      }
     }
   }
 
-  Future<void> _processImage(File imageFile) async {
-    final inputImage = InputImage.fromFile(imageFile);
-    final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+  // 2. 行動裝置 OCR 處理邏輯
+  Future<void> _processImage(XFile imageFile) async {
+    if (kIsWeb) return;
 
-    setState(() {
-      _extractedText = recognizedText.text;
-    });
+    try {
+      final inputImage = InputImage.fromFilePath(imageFile.path);
+      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
 
-    // Parse metrics
-    final metrics = _parseMetrics(recognizedText.text);
-    setState(() {
-      _parsedMetrics = metrics;
-    });
+      setState(() {
+        _extractedText = recognizedText.text;
+      });
 
-    // Save to Firestore if user is logged in
+      final metrics = _parseMetrics(recognizedText.text);
+      setState(() {
+        _parsedMetrics = metrics;
+      });
+
+      // 自動儲存至 Firestore
+      await _saveReportToFirestore(metrics);
+    } catch (e) {
+      developer.log("OCR Error", error: e, name: "upload_page");
+    }
+  }
+
+  // 3. 手動輸入對話框 (用於 Web 或辨識失敗時)
+  Future<void> _showManualInputDialog() async {
+    final weightController = TextEditingController(text: _parsedMetrics["weight"]?.toString());
+    final fatController = TextEditingController(text: _parsedMetrics["bodyFatPercent"]?.toString());
+    final muscleController = TextEditingController(text: _parsedMetrics["muscleMass"]?.toString());
+    final visceralController = TextEditingController(text: _parsedMetrics["visceralFat"]?.toString());
+
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text("Manual Input"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildManualTextField(weightController, "weight (kg)", Icons.monitor_weight),
+              _buildManualTextField(fatController, "bodyFatPercent (%)", Icons.pie_chart),
+              _buildManualTextField(muscleController, "muscleMass (kg)", Icons.fitness_center),
+              _buildManualTextField(visceralController, "visceralFat", Icons.opacity),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("cancel")),
+          ElevatedButton(
+            onPressed: () async {
+              final metrics = {
+                "weight": double.tryParse(weightController.text) ?? 0.0,
+                "bodyFatPercent": double.tryParse(fatController.text) ?? 0.0,
+                "muscleMass": double.tryParse(muscleController.text) ?? 0.0,
+                "visceralFat": double.tryParse(visceralController.text) ?? 0.0,
+                "reportDate": DateTime.now().toIso8601String(),
+              };
+              setState(() {
+                _parsedMetrics = metrics;
+              });
+              await _saveReportToFirestore(metrics);
+              if (mounted) Navigator.pop(context);
+            },
+            child: const Text("confirm"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 4. 儲存至 Firestore 的統一方法
+  Future<void> _saveReportToFirestore(Map<String, dynamic> metrics) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    if (auth.user != null) {
+    if (auth.user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("please login to save reports")));
+      return;
+    }
+
+    try {
       final report = InbodyReport(
         id: '',
         reportDate: DateTime.parse(metrics["reportDate"]),
-        weight: metrics["weight"],
-        bodyFatPercent: metrics["bodyFatPercent"],
-        muscleMass: metrics["muscleMass"],
-        visceralFat: metrics["visceralFat"],
+        weight: (metrics["weight"] as num).toDouble(),
+        bodyFatPercent: (metrics["bodyFatPercent"] as num).toDouble(),
+        muscleMass: (metrics["muscleMass"] as num).toDouble(),
+        visceralFat: (metrics["visceralFat"] as num).toDouble(),
       );
 
       await FirebaseFirestore.instance
@@ -65,37 +142,32 @@ class _UploadPageState extends State<UploadPage> {
           .doc(auth.user!.uid)
           .collection("reports")
           .add(report.toMap());
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("The data has been successfully saved to the cloud.")));
+      }
+    } catch (e) {
+      developer.log("Firestore Save Error", error: e, name: "upload_page");
     }
   }
 
+  // 輔助：正則表達式解析
   Map<String, dynamic> _parseMetrics(String text) {
     final weightRegex = RegExp(r'Weight[:\s]*([\d.]+)');
     final fatRegex = RegExp(r'Body\s*Fat[:\s]*([\d.]+)');
     final muscleRegex = RegExp(r'Muscle\s*Mass[:\s]*([\d.]+)');
     final visceralRegex = RegExp(r'Visceral\s*Fat[:\s]*([\d.]+)');
 
-    double? weight;
-    double? bodyFat;
-    double? muscleMass;
-    double? visceralFat;
-
-    final weightMatch = weightRegex.firstMatch(text);
-    if (weightMatch != null) weight = double.tryParse(weightMatch.group(1)!);
-
-    final fatMatch = fatRegex.firstMatch(text);
-    if (fatMatch != null) bodyFat = double.tryParse(fatMatch.group(1)!);
-
-    final muscleMatch = muscleRegex.firstMatch(text);
-    if (muscleMatch != null) muscleMass = double.tryParse(muscleMatch.group(1)!);
-
-    final visceralMatch = visceralRegex.firstMatch(text);
-    if (visceralMatch != null) visceralFat = double.tryParse(visceralMatch.group(1)!);
+    double getValue(RegExp regex) {
+      final match = regex.firstMatch(text);
+      return match != null ? (double.tryParse(match.group(1)!) ?? 0.0) : 0.0;
+    }
 
     return {
-      "weight": weight ?? 0,
-      "bodyFatPercent": bodyFat ?? 0,
-      "muscleMass": muscleMass ?? 0,
-      "visceralFat": visceralFat ?? 0,
+      "weight": getValue(weightRegex),
+      "bodyFatPercent": getValue(fatRegex),
+      "muscleMass": getValue(muscleRegex),
+      "visceralFat": getValue(visceralRegex),
       "reportDate": DateTime.now().toIso8601String(),
     };
   }
@@ -109,12 +181,11 @@ class _UploadPageState extends State<UploadPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Upload InBody Report")),
+      appBar: AppBar(title: const Text("InBody Report Analysis")),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Show sample image if no user image selected
             Container(
               height: 200,
               width: double.infinity,
@@ -122,53 +193,81 @@ class _UploadPageState extends State<UploadPage> {
                 border: Border.all(color: Colors.grey),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: _selectedImage == null
-                  ? Image.asset("assets/images/sample_report.jpg", fit: BoxFit.cover)
-                  : Image.file(_selectedImage!, fit: BoxFit.cover),
+              child: _buildImagePreview(),
             ),
             const SizedBox(height: 20),
-
-            ElevatedButton.icon(
-              icon: const Icon(Icons.upload_file),
-              label: const Text("Pick Report Image"),
-              onPressed: _pickImage,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text("Select Image"),
+                  onPressed: _pickImage,
+                ),
+                if (kIsWeb)
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.edit),
+                    label: const Text("Manual Entry"),
+                    onPressed: _showManualInputDialog,
+                  ),
+              ],
             ),
             const SizedBox(height: 20),
-
-            // OCR extracted text
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _extractedText.isEmpty ? "No text extracted yet" : _extractedText,
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(height: 20),
-
-                    if (_parsedMetrics?.isNotEmpty ?? false) ...[
-                      Text("Weight: ${_parsedMetrics["weight"]} kg"),
-                      Text("Body Fat: ${_parsedMetrics["bodyFatPercent"]} %"),
-                      Text("Muscle Mass: ${_parsedMetrics["muscleMass"]} kg"),
-                      Text("Visceral Fat: ${_parsedMetrics["visceralFat"]}"),
+                    Text(_extractedText, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    const Divider(),
+                    if (_parsedMetrics.isNotEmpty) ...[
+                      _buildMetricTile("weight", "${_parsedMetrics["weight"]} kg"),
+                      _buildMetricTile("bodyFatPercent", "${_parsedMetrics["bodyFatPercent"]} %"),
+                      _buildMetricTile("muscleMass", "${_parsedMetrics["muscleMass"]} kg"),
+                      _buildMetricTile("visceralFat", "${_parsedMetrics["visceralFat"]}"),
                     ],
                   ],
                 ),
               ),
             ),
-
-            const SizedBox(height: 20),
-            ElevatedButton(
-              child: const Text("Go to Login"),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                );
-              },
-            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImagePreview() {
+    if (_imageFile == null) {
+      return Image.asset("assets/images/sample_report.jpg", fit: BoxFit.cover);
+    }
+    if (kIsWeb && _webImage != null) {
+      return Image.memory(_webImage!, fit: BoxFit.cover);
+    } else if (!kIsWeb) {
+      return Image.file(File(_imageFile!.path), fit: BoxFit.cover);
+    }
+    return const Center(child: Text("Failed to load preview."));
+  }
+
+  Widget _buildMetricTile(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [Text(label, style: const TextStyle(fontWeight: FontWeight.bold)), Text(value)],
+      ),
+    );
+  }
+
+  Widget _buildManualTextField(TextEditingController controller, String label, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+          border: const OutlineInputBorder(),
         ),
       ),
     );
