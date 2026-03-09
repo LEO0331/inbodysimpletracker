@@ -1,10 +1,11 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'core/app_router.dart';
+
 import 'firebase_options.dart';
 import 'logic/providers/auth_provider.dart';
 import 'logic/providers/report_provider.dart';
+import 'presentation/upload/upload_page.dart'; // new upload page
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,7 +14,6 @@ void main() async {
   );
   runApp(const MyApp());
 }
-
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -27,7 +27,7 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'InBody Tracker',
         theme: ThemeData(primarySwatch: Colors.blue),
-        home: const AuthGate(),
+        home: const UploadPage(), // show upload bar first
       ),
     );
   }
