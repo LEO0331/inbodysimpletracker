@@ -300,7 +300,7 @@ class _UploadPageState extends State<UploadPage> {
         child: Column(
           children: [
             Container(
-              height: 400,
+              height: 350,
               width: double.infinity,
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey),
