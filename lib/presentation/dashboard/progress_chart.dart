@@ -6,12 +6,14 @@ class InbodyChart extends StatelessWidget {
   final List<InbodyReport> reports;
   final String metric; // "weight", "bodyFatPercent", "muscleMass", "all"
   final bool isFullAnalysis; // 是否為全螢幕分析模式（顯示圖例）
+  final double? targetWeight; // ✅ 新增：目標體重數值
 
   const InbodyChart({
     super.key,
     required this.reports,
     this.metric = "weight",
     this.isFullAnalysis = false,
+    this.targetWeight, // ✅ 接收目標體重
   });
 
   @override
@@ -22,16 +24,14 @@ class InbodyChart extends StatelessWidget {
     final List<LineChartBarData> lines = [];
     
     if (metric == "all" || isFullAnalysis) {
-      // 多線模式
       lines.add(_buildLineData(_getSpots("weight"), Colors.blue));
       lines.add(_buildLineData(_getSpots("bodyFatPercent"), Colors.orange));
       lines.add(_buildLineData(_getSpots("muscleMass"), Colors.green));
     } else {
-      // 單線模式 (Dashboard 預設)
       lines.add(_buildLineData(_getSpots(metric), _getMetricColor(metric), showArea: true));
     }
 
-    // 2. 計算 Y 軸範圍 (取得所有線條中的極值)
+    // 2. 計算 Y 軸範圍
     double minY = double.infinity;
     double maxY = double.negativeInfinity;
     for (var line in lines) {
@@ -40,12 +40,18 @@ class InbodyChart extends StatelessWidget {
         if (spot.y > maxY) maxY = spot.y;
       }
     }
-    double padding = (maxY - minY) * 0.15;
+
+    // ✅ 如果有目標體重，且正在顯示體重指標，將目標值納入 Y 軸範圍計算
+    if (metric == "weight" && targetWeight != null) {
+      if (targetWeight! < minY) minY = targetWeight!;
+      if (targetWeight! > maxY) maxY = targetWeight!;
+    }
+
+    double padding = (maxY - minY) * 0.2; // 稍微增加 padding 讓紅線標籤有空間
     if (padding == 0) padding = 5.0;
 
     return Column(
       children: [
-        // 如果是全分析模式，顯示圖例
         if (isFullAnalysis) _buildLegend(),
         
         Expanded(
@@ -61,6 +67,28 @@ class InbodyChart extends StatelessWidget {
                   left: BorderSide(color: Colors.grey.shade300),
                 ),
               ),
+              // ✅ 加入目標紅線 (ExtraLinesData)
+              extraLinesData: ExtraLinesData(
+                horizontalLines: [
+                  if (metric == "weight" && targetWeight != null)
+                    HorizontalLine(
+                      y: targetWeight!,
+                      color: Colors.red.withOpacity(0.7),
+                      strokeWidth: 2,
+                      dashArray: [5, 5], // 虛線設定
+                      label: HorizontalLineLabel(
+                        show: true,
+                        alignment: Alignment.topRight,
+                        labelResolver: (line) => 'Goal: ${line.y}kg',
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               lineTouchData: _buildTouchData(),
               titlesData: _buildTitlesData(),
               lineBarsData: lines,
@@ -71,7 +99,7 @@ class InbodyChart extends StatelessWidget {
     );
   }
 
-  // 取得特定指標的點
+  // 以下輔助方法與您原本的邏輯相同，維持不變
   List<FlSpot> _getSpots(String m) {
     return List.generate(reports.length, (i) {
       final r = reports[i];
@@ -84,7 +112,6 @@ class InbodyChart extends StatelessWidget {
     });
   }
 
-  // 建立線條樣式
   LineChartBarData _buildLineData(List<FlSpot> spots, Color color, {bool showArea = false}) {
     return LineChartBarData(
       spots: spots,
@@ -99,7 +126,6 @@ class InbodyChart extends StatelessWidget {
     );
   }
 
-  // 觸發點擊提示
   LineTouchData _buildTouchData() {
     return LineTouchData(
       touchTooltipData: LineTouchTooltipData(
@@ -108,7 +134,6 @@ class InbodyChart extends StatelessWidget {
           return touchedSpots.map((barSpot) {
             final titles = ["Weight", "Fat %", "Muscle"];
             final unit = barSpot.barIndex == 1 ? "%" : "kg";
-            // 如果是單線模式，名稱要對應正確
             String label = isFullAnalysis ? titles[barSpot.barIndex] : metric;
             return LineTooltipItem(
               '$label: ${barSpot.y}$unit',
@@ -120,7 +145,6 @@ class InbodyChart extends StatelessWidget {
     );
   }
 
-  // 座標軸標籤設定 (相容 Web)
   FlTitlesData _buildTitlesData() {
     return FlTitlesData(
       rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
