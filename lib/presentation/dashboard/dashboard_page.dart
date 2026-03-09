@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'dart:developer' as developer;
 
 import '../../logic/providers/auth_provider.dart';
 import '../../data/models/inbody_report.dart';
@@ -15,6 +16,42 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  
+  // 🗑️ 新增：刪除報告的方法
+  Future<void> _deleteReport(String uid, String reportId) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Report"),
+        content: const Text("Are you sure you want to delete this InBody report? This action cannot be undone."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await FirebaseFirestore.instance
+            .collection("users")
+            .doc(uid)
+            .collection("reports")
+            .doc(reportId)
+            .delete();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Report deleted")));
+        }
+      } catch (e) {
+        developer.log("Delete failed", error: e, name: "dashboard.page");
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
@@ -22,21 +59,18 @@ class _DashboardPageState extends State<DashboardPage> {
     if (auth.user == null) {
       return Scaffold(
         appBar: AppBar(title: const Text("Dashboard")),
-        body: const Center(
-          child: Text("Please login to view your dashboard"),
-        ),
+        body: const Center(child: Text("Please login to view your dashboard")),
       );
     }
 
+    final String uid = auth.user!.uid;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Dashboard"),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text("Dashboard"), elevation: 0),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("users")
-            .doc(auth.user!.uid)
+            .doc(uid)
             .collection("reports")
             .orderBy("reportDate", descending: true)
             .snapshots(),
@@ -46,43 +80,17 @@ class _DashboardPageState extends State<DashboardPage> {
           }
 
           if (snapshot.hasError) {
-            return Center(
-              child: Text("Error: ${snapshot.error}"),
-            );
+            return Center(child: Text("Error: ${snapshot.error}"));
           }
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.folder_open,
-                    size: 80,
-                    color: Colors.grey[300],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    "No reports yet",
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "Start by uploading your first InBody report",
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back),
-                    label: const Text("Go to Upload"),
-                  ),
-                ],
-              ),
-            );
-          }
+          // 1. 使用模型轉換資料 (解決 Timestamp/String 報錯)
+          final reports = snapshot.data!.docs.map((doc) {
+            return InbodyReport.fromMap(doc.id, doc.data() as Map<String, dynamic>);
+          }).toList();
 
-          final reports = snapshot.data!.docs;
+          if (reports.isEmpty) {
+            return _buildEmptyState();
+          }
 
           return Column(
             children: [
@@ -103,11 +111,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     Expanded(
                       child: _buildSummaryCard(
                         title: "Latest Report",
-                        value: reports.isNotEmpty
-                            ? DateFormat('MMM dd').format(
-                                (reports.first['reportDate'] as Timestamp).toDate(),
-                              )
-                            : "N/A",
+                        value: DateFormat('MMM dd').format(reports.first.reportDate),
                         icon: Icons.calendar_today,
                         color: Colors.green,
                       ),
@@ -121,21 +125,15 @@ class _DashboardPageState extends State<DashboardPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: reports.length,
                   itemBuilder: (context, index) {
-                    final doc = reports[index];
-                    final data = doc.data() as Map<String, dynamic>;
+                    final report = reports[index];
 
-                    final report = InbodyReport(
-                      id: doc.id,
-                      reportDate: (data['reportDate'] as Timestamp).toDate(),
-                      weight: (data['weight'] as num).toDouble(),
-                      bodyFatPercent: (data['bodyFatPercent'] as num).toDouble(),
-                      muscleMass: (data['muscleMass'] as num).toDouble(),
-                      visceralFat: (data['visceralFat'] as num).toDouble(),
-                    );
-
-                    return ReportCard(
-                      report: report,
-                      index: index + 1,
+                    // 🛠️ 封裝在 GestureDetector 或 ListTile 中以支援長按刪除
+                    return GestureDetector(
+                      onLongPress: () => _deleteReport(uid, report.id),
+                      child: ReportCard(
+                        report: report,
+                        index: reports.length - index, // 反轉索引顯示正確序號
+                      ),
                     );
                   },
                 ),
@@ -143,6 +141,25 @@ class _DashboardPageState extends State<DashboardPage> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.folder_open, size: 80, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          const Text("No reports yet", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back),
+            label: const Text("Go to Upload"),
+          ),
+        ],
       ),
     );
   }
@@ -165,22 +182,8 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           Icon(icon, color: color, size: 28),
           const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-            ),
-          ),
+          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
         ],
       ),
     );

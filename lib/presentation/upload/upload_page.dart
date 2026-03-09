@@ -207,7 +207,9 @@ class _UploadPageState extends State<UploadPage> {
 
   @override
   void dispose() {
-    textRecognizer.close();
+    if (!kIsWeb) {
+      textRecognizer.close();
+    }
     super.dispose();
   }
 
