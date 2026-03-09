@@ -18,6 +18,10 @@ class ReportCard extends StatelessWidget {
 
   void _showDeleteDialog(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context, listen: false);
+    final user = auth.user;
+
+    // 🛡️ 安全檢查：確保使用者已登入
+    if (user == null) return;
 
     showDialog(
       context: context,
@@ -34,7 +38,7 @@ class ReportCard extends StatelessWidget {
               try {
                 await FirebaseFirestore.instance
                     .collection("users")
-                    .doc(auth.user!.uid)
+                    .doc(user.uid)
                     .collection("reports")
                     .doc(report.id)
                     .delete();
@@ -62,6 +66,7 @@ class ReportCard extends StatelessWidget {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
             ),
             child: const Text("Delete"),
           ),
@@ -72,75 +77,51 @@ class ReportCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 🛡️ 安全檢查：確保日期不為 null (雖然 Model 已處理，但多一層保護)
+    final String formattedDate = report.reportDate != null 
+        ? DateFormat('MMM dd, yyyy').format(report.reportDate)
+        : "Unknown Date";
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias, // 讓邊角更圓滑
       child: ExpansionTile(
-        title: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.blue[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Text(
-                  '$index',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue[700],
-                    fontSize: 18,
-                  ),
-                ),
-              ),
+        backgroundColor: Colors.blue[50]?.withOpacity(0.3),
+        leading: CircleAvatar(
+          backgroundColor: Colors.blue[100],
+          child: Text(
+            '$index',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.blue[700],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    DateFormat('MMM dd, yyyy').format(report.reportDate),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  Text(
-                    'Weight: ${report.weight} kg',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
+        ),
+        title: Text(
+          formattedDate,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          'Weight: ${report.weight?.toStringAsFixed(1) ?? "0.0"} kg',
+          style: TextStyle(color: Colors.grey[600], fontSize: 12),
         ),
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Divider(),
-                _buildMetricRow('Weight', '${report.weight} kg', Icons.monitor_weight),
-                _buildMetricRow('Body Fat %', '${report.bodyFatPercent}%', Icons.pie_chart),
-                _buildMetricRow('Muscle Mass', '${report.muscleMass} kg', Icons.fitness_center),
-                _buildMetricRow('Visceral Fat', '${report.visceralFat}', Icons.opacity),
+                _buildMetricRow('Weight', '${report.weight ?? 0} kg', Icons.monitor_weight),
+                _buildMetricRow('Body Fat %', '${report.bodyFatPercent ?? 0}%', Icons.pie_chart),
+                _buildMetricRow('Muscle Mass', '${report.muscleMass ?? 0} kg', Icons.fitness_center),
+                _buildMetricRow('Visceral Fat', '${report.visceralFat ?? 0}', Icons.opacity),
                 const SizedBox(height: 16),
-                // Delete button
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: () => _showDeleteDialog(context),
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    label: const Text(
-                      'Delete Report',
-                      style: TextStyle(color: Colors.red),
-                    ),
+                    icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+                    label: const Text('Delete Report', style: TextStyle(color: Colors.red)),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.red),
                     ),
@@ -155,21 +136,19 @@ class ReportCard extends StatelessWidget {
   }
 
   Widget _buildMetricRow(String label, String value, IconData icon) {
+    // 🛡️ 確保 value 絕對不是 null，避免 Text 崩潰
+    final safeValue = value ?? "N/A";
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Colors.blue),
+          Icon(icon, size: 20, color: Colors.blue[700]),
           const SizedBox(width: 12),
-          Expanded(
-            child: Text(label),
-          ),
+          Expanded(child: Text(label)),
           Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
+            safeValue,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
         ],
       ),

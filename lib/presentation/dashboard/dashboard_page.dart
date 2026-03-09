@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart'; // 確保有導入 intl
 import 'dart:developer' as developer;
 
 import '../../logic/providers/auth_provider.dart';
 import '../../data/models/inbody_report.dart';
+import 'progress_chart.dart';
 import 'report_card.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -16,85 +17,57 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  
-  // 🗑️ 新增：刪除報告的方法
-  Future<void> _deleteReport(String uid, String reportId) async {
-    final bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Delete Report"),
-        content: const Text("Are you sure you want to delete this InBody report? This action cannot be undone."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        await FirebaseFirestore.instance
-            .collection("users")
-            .doc(uid)
-            .collection("reports")
-            .doc(reportId)
-            .delete();
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Report deleted")));
-        }
-      } catch (e) {
-        developer.log("Delete failed", error: e, name: "dashboard.page");
-      }
-    }
-  }
+  String _selectedMetric = "weight";
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final user = auth.user;
 
-    if (auth.user == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text("Dashboard")),
-        body: const Center(child: Text("Please login to view your dashboard")),
-      );
+    if (user == null) {
+      return const Scaffold(body: Center(child: Text("Please login")));
     }
 
-    final String uid = auth.user!.uid;
-
     return Scaffold(
-      appBar: AppBar(title: const Text("Dashboard"), elevation: 0),
+      appBar: AppBar(title: const Text("InBody Progress"), elevation: 0),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("users")
-            .doc(uid)
+            .doc(user.uid)
             .collection("reports")
             .orderBy("reportDate", descending: true)
             .snapshots(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
+          if (!snapshot.hasData || snapshot.data == null) {
+            return const Center(child: Text("No data available"));
           }
 
-          // 1. 使用模型轉換資料 (解決 Timestamp/String 報錯)
-          final reports = snapshot.data!.docs.map((doc) {
-            return InbodyReport.fromMap(doc.id, doc.data() as Map<String, dynamic>);
-          }).toList();
+          final docs = snapshot.data!.docs;
+          if (docs.isEmpty) return const Center(child: Text("No reports yet."));
 
-          if (reports.isEmpty) {
-            return _buildEmptyState();
+          // ✅ 修正點 1：更安全的資料解析邏輯
+          final List<InbodyReport> reports = [];
+          for (var doc in docs) {
+            try {
+              final data = doc.data() as Map<String, dynamic>?;
+              if (data != null) {
+                reports.add(InbodyReport.fromMap(doc.id, data));
+              }
+            } catch (e) {
+              developer.log("Error parsing doc ${doc.id}", error: e);
+            }
           }
+
+          final chartReports = reports.reversed.toList();
 
           return Column(
             children: [
-              // Summary Cards
+              // ✅ 修正點 2：重新補回 Summary Cards 並確保 value 絕不為 Null
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -111,7 +84,10 @@ class _DashboardPageState extends State<DashboardPage> {
                     Expanded(
                       child: _buildSummaryCard(
                         title: "Latest Report",
-                        value: DateFormat('MMM dd').format(reports.first.reportDate),
+                        // 使用 ?? 確保轉 String 時不會遇到 Null
+                        value: reports.isNotEmpty 
+                            ? DateFormat('MMM dd').format(reports.first.reportDate)
+                            : "N/A",
                         icon: Icons.calendar_today,
                         color: Colors.green,
                       ),
@@ -119,21 +95,55 @@ class _DashboardPageState extends State<DashboardPage> {
                   ],
                 ),
               ),
-              // Reports List
+
+              // 指標切換
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildMetricChip("weight", "Weight"),
+                      const SizedBox(width: 8),
+                      _buildMetricChip("bodyFatPercent", "Body Fat %"),
+                      const SizedBox(width: 8),
+                      _buildMetricChip("muscleMass", "Muscle"),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 圖表
+              if (chartReports.isNotEmpty)
+                Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 32, 16),
+                    child: ProgressChart(
+                      reports: chartReports, 
+                      metric: _selectedMetric,
+                    ),
+                  ),
+                ),
+
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft, 
+                  child: Text("History", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))
+                ),
+              ),
+
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: reports.length,
                   itemBuilder: (context, index) {
-                    final report = reports[index];
-
-                    // 🛠️ 封裝在 GestureDetector 或 ListTile 中以支援長按刪除
-                    return GestureDetector(
-                      onLongPress: () => _deleteReport(uid, report.id),
-                      child: ReportCard(
-                        report: report,
-                        index: reports.length - index, // 反轉索引顯示正確序號
-                      ),
+                    return ReportCard(
+                      report: reports[index],
+                      index: reports.length - index,
                     );
                   },
                 ),
@@ -145,25 +155,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.folder_open, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          const Text("No reports yet", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back),
-            label: const Text("Go to Upload"),
-          ),
-        ],
-      ),
-    );
-  }
-
+  // ✅ 修正點 3：確保 SummaryCard 的參數處理強健
   Widget _buildSummaryCard({
     required String title,
     required String value,
@@ -171,7 +163,7 @@ class _DashboardPageState extends State<DashboardPage> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         border: Border.all(color: color.withOpacity(0.3)),
@@ -180,12 +172,25 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 28),
+          Icon(icon, color: color, size: 24),
           const SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          Text(
+            value, // 此處 value 已經在傳入前保證非 Null
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color),
+          ),
+          Text(title, style: TextStyle(fontSize: 11, color: Colors.grey[700])),
         ],
       ),
+    );
+  }
+
+  Widget _buildMetricChip(String metric, String label) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: _selectedMetric == metric,
+      onSelected: (bool selected) {
+        if (selected) setState(() => _selectedMetric = metric);
+      },
     );
   }
 }
