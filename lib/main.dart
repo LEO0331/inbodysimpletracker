@@ -5,7 +5,8 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'logic/providers/auth_provider.dart';
 import 'logic/providers/report_provider.dart';
-import 'presentation/upload/upload_page.dart'; // new upload page
+import 'presentation/auth/login_page.dart';
+import 'presentation/upload/upload_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +18,7 @@ void main() async {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -27,7 +29,15 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'InBody Tracker',
         theme: ThemeData(primarySwatch: Colors.blue),
-        home: const UploadPage(), // show upload bar first
+        home: Consumer<AuthProvider>(
+          builder: (context, auth, _) {
+            if (auth.isLoading) {
+              return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            }
+            // Navigate based on authentication state
+            return auth.isAuthenticated ? const UploadPage() : const LoginPage();
+          },
+        ),
       ),
     );
   }
