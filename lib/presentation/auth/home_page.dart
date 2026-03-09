@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../logic/providers/auth_provider.dart';
-import '../auth/login_page.dart';
-import '../auth/signup_page.dart';
 import '../upload/upload_page.dart';
 
 class HomePage extends StatelessWidget {
@@ -61,12 +59,7 @@ class HomePage extends StatelessWidget {
                     child: ElevatedButton.icon(
                       onPressed: auth.isAuthenticated
                           ? () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const UploadPage(),
-                                ),
-                              );
+                              Navigator.pushNamed(context, '/upload');
                             }
                           : () {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -116,12 +109,7 @@ class HomePage extends StatelessWidget {
                     height: 56,
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const LoginPage(),
-                          ),
-                        );
+                        Navigator.pushNamed(context, '/login');
                       },
                       icon: const Icon(Icons.login, size: 24),
                       label: const Text(
@@ -146,12 +134,7 @@ class HomePage extends StatelessWidget {
                     height: 56,
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SignupPage(),
-                          ),
-                        );
+                        Navigator.pushNamed(context, '/signup');
                       },
                       icon: const Icon(Icons.person_add, size: 24),
                       label: const Text(
