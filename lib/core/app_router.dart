@@ -1,46 +1,33 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-import '../../logic/providers/auth_provider.dart';
-import '../presentation/admin/admin_page.dart';
 import '../presentation/auth/login_page.dart';
+import '../presentation/auth/signup_page.dart';
 import '../presentation/dashboard/dashboard_page.dart';
+import '../presentation/upload/upload_page.dart';
+import '../presentation/admin/admin_page.dart';
+import '../presentation/auth/home_page.dart';
 
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
-
-  Future<String?> _getUserRole(String uid) async {
-    final doc = await FirebaseFirestore.instance.collection("users").doc(uid).get();
-    return doc.data()?["role"];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
-
-    if (auth.user == null) {
-      // Not logged in → show login page
-      return const LoginPage();
+class AppRouter {
+  static Route<dynamic> generateRoute(RouteSettings settings) {
+    switch (settings.name) {
+      case '/':
+        return MaterialPageRoute(builder: (_) => const HomePage());
+      case '/login':
+        return MaterialPageRoute(builder: (_) => const LoginPage());
+      case '/signup':
+        return MaterialPageRoute(builder: (_) => const SignupPage());
+      case '/upload':
+        return MaterialPageRoute(builder: (_) => const UploadPage());
+      case '/dashboard':
+        return MaterialPageRoute(builder: (_) => const DashboardPage());
+      case '/admin':
+        return MaterialPageRoute(builder: (_) => const AdminPage());
+      default:
+        return MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('Error')),
+            body: const Center(child: Text('Route not found')),
+          ),
+        );
     }
-
-    // Logged in → check role
-    return FutureBuilder<String?>(
-      future: _getUserRole(auth.user!.uid),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        final role = snapshot.data;
-        if (role == "admin") {
-          return const AdminPage();
-        } else {
-          return const DashboardPage();
-        }
-      },
-    );
   }
 }
