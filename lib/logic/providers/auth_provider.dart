@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../data/services/auth_service.dart';
 
 class AuthProvider with ChangeNotifier {
-  final AuthService _authService = AuthService();
+  final AuthService _authService;
 
   User? _user;
   bool _isAdmin = false;
@@ -19,7 +19,8 @@ class AuthProvider with ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _isAuthenticated;
 
-  AuthProvider() {
+  AuthProvider({AuthService? authService}) 
+    : _authService = authService ?? AuthService() {
     final currentUser = FirebaseAuth.instance.currentUser;
     _user = currentUser;
     _isAuthenticated = currentUser != null;

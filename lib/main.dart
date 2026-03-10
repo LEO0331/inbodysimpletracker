@@ -39,10 +39,8 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
-        // ✅ 方案：保留 home 作為進入點，並在 routes 中定義跳轉路徑
         home: const HomePage(), 
         routes: {
-          // ⚠️ 注意：不要在這裡重複定義 '/'，否則會跟 home 衝突
           '/login': (context) => const LoginPage(),
           '/signup': (context) => const SignupPage(),
           '/dashboard': (context) => const DashboardPage(),

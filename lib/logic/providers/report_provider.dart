@@ -4,9 +4,11 @@ import '../../data/models/inbody_report.dart';
 import '../../data/services/firestore_service.dart';
 
 class ReportProvider with ChangeNotifier {
-  final FirestoreService _firestoreService = FirestoreService();
+  final FirestoreService _firestoreService;
   List<InbodyReport> reports = [];
-
+  ReportProvider({FirestoreService? firestoreService}) 
+      : _firestoreService = firestoreService ?? FirestoreService();
+      
   void listenReports(String uid) {
     _firestoreService.getReports(uid).listen((data) {
       reports = data;

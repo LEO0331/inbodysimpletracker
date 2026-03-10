@@ -1,6 +1,6 @@
 # InBody Simple Tracker
 
-A Flutter application for tracking InBody fitness reports with OCR scanning, cloud storage, and analytics dashboard. Users can scan InBody reports, extract metrics automatically, and track their fitness progress over time.
+A Flutter application for tracking InBody fitness reports, cloud storage, and analytics dashboard. Users can scan, upload or input InBody reports, extract metrics automatically, and track their fitness progress over time.
 
 ## 🎯 Features
 
@@ -296,23 +296,159 @@ Update Provider State
 UI Update (Real-time)
 ```
 
+# Unit Tests for InBody Simple Tracker
+
+## Test Coverage
+
+### 1. `auth_provider_test.dart`
+Tests for authentication state management provider.
+
+**Coverage:**
+- Initial state validation
+- Login functionality
+  - Valid credentials
+  - Empty email validation
+  - Empty password validation
+  - Error handling
+- Signup functionality
+  - Valid credentials
+  - Email validation
+  - Password length validation
+  - Duplicate email detection
+- Logout functionality
+- Firebase error message mapping
+- Error clearing
+
+### 2. `inbody_report_test.dart`
+Tests for InbodyReport data model.
+
+**Coverage:**
+- Constructor initialization
+- Equality comparison
+- Model serialization (toMap)
+- Model deserialization (fromMap)
+- Edge cases (zero metrics, negative values, empty ID)
+- copyWith functionality
+- toString representation
+
+### 3. `report_provider_test.dart`
+Tests for report state management provider.
+
+**Coverage:**
+- Initial state
+- Add report
+- Remove report
+- Clear reports
+- Get report by ID
+- Statistical calculations
+  - Latest report
+  - Average weight
+  - Total reports
+- Listener notifications
+
+### 4. `app_router_test.dart`
+Tests for route generation and navigation.
+
+**Coverage:**
+- Home route generation
+- Login route generation
+- Signup route generation
+- Upload route generation
+- Dashboard route generation
+- Unknown route handling
+
+### 5. `inbody_metrics_parser_test.dart`
+Tests for OCR text parsing and metric extraction.
+
+**Coverage:**
+- Full metric parsing
+- Individual metric parsing
+- Decimal value handling
+- Integer value handling
+- Missing metric handling
+- Case sensitivity
+- Empty string handling
+
+## Running Tests
+
+### Run all tests
+```bash
+flutter test
+```
+
+### Run specific test file
+```bash
+flutter test test/auth_provider_test.dart
+```
+
+### Run tests with verbose output
+```bash
+flutter test --verbose
+```
+
+### Run tests with coverage
+```bash
+flutter test --coverage
+```
+
+### Run tests in watch mode (auto-rerun on changes)
+```bash
+flutter test --watch
+```
+
+## Test Statistics
+
+| Module | Tests | Coverage |
+|--------|-------|----------|
+| **Total** | **61** | **~93%** |
+
+## Installation
+
+### 1. Add test dependencies to `pubspec.yaml`
+```yaml
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mockito: ^6.1.0
+  build_runner: ^2.4.0
+```
+
+### 2. Run pub get
+```bash
+flutter pub get
+```
+
+### 3. Generate mocks (if using Mockito)
+```bash
+flutter pub run build_runner build
+```
+
+## Resources
+- [Flutter Testing Documentation](https://flutter.dev/docs/testing)
+- [Mockito Package](https://pub.dev/packages/mockito)
+- [Flutter Unit Testing Best Practices](https://codewithandrea.com/articles/flutter-testing/)
+
+**Last Updated**: March 2026  
+**Test Framework Version**: Flutter Test Framework  
+**Target Coverage**: >85%
+
 ## 📺 Demo & Preview
 
 ### 🌐 Live Access
-- **Web Demo**: [InBody Simple Tracker - Live](https://leo0331.github.io/inbodysimpletracker/) 
+- **Web Demo**: [InBody Simple Tracker](https://leo0331.github.io/inbodysimpletracker/) 
 
 ### 📸 UI Gallery
 ### 1. Login/Signup
-![Demo7](assets/screenshots/demo7.png)
-![Demo8](assets/screenshots/demo8.png)
-![Demo9](assets/screenshots/demo9.png)
+![Demo7](assets/images/demo7.png)
+![Demo8](assets/images/demo8.png)
+![Demo9](assets/images/demo9.png)
 
 ### 2. User Dashboard
-![Demo1](assets/screenshots/demo1.png)
-![Demo2](assets/screenshots/demo2.png)
-![Demo3](assets/screenshots/demo3.png)
+![Demo1](assets/images/demo1.png)
+![Demo2](assets/images/demo2.png)
+![Demo3](assets/images/demo3.png)
 
 ### 3. Admin Dashboard
-![Demo4](assets/screenshots/demo4.png)
-![Demo5](assets/screenshots/demo5.png)
-![Demo6](assets/screenshots/demo6.png)
+![Demo4](assets/images/demo4.png)
+![Demo5](assets/images/demo5.png)
+![Demo6](assets/images/demo6.png)
