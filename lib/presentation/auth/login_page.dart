@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import '../../logic/providers/mqtt_provider.dart';
 import '../../logic/providers/auth_provider.dart';
 import 'signup_page.dart';
 
@@ -26,7 +26,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
-
+    final mqtt = Provider.of<MqttProvider>(context, listen: false);
     return Scaffold(
       appBar: AppBar(
         title: const Text("Login"),
@@ -204,6 +204,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: OutlinedButton.icon(
                       onPressed: () async {
                         await auth.logout();
+                        mqtt.disconnect();
                         if (mounted) {
                           Navigator.of(context)
                               .pushNamedAndRemoveUntil('/', (route) => false);

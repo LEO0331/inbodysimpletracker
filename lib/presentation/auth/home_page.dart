@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../logic/providers/auth_provider.dart';
-
+import '../../logic/providers/mqtt_provider.dart';
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -122,6 +122,7 @@ class HomePage extends StatelessWidget {
 
   // 側邊欄組件
   Widget _buildDrawer(BuildContext context, AuthProvider auth) {
+    final mqtt = Provider.of<MqttProvider>(context, listen: false);
     return Drawer(
       child: Column(
         children: [
@@ -175,6 +176,7 @@ class HomePage extends StatelessWidget {
             title: const Text("Logout"),
             onTap: () async {
               await auth.logout();
+              mqtt.disconnect();
               if (context.mounted) {
                 Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
               }

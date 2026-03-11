@@ -6,7 +6,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:developer' as developer;
-
+import '../../logic/providers/mqtt_provider.dart';
 import '../../logic/providers/auth_provider.dart';
 import '../../data/models/inbody_report.dart';
 import '../dashboard/dashboard_page.dart';
@@ -198,7 +198,9 @@ class _UploadPageState extends State<UploadPage> {
 
     if (confirmed ?? false) {
       final auth = Provider.of<AuthProvider>(context, listen: false);
+      final mqtt = Provider.of<MqttProvider>(context, listen: false);
       await auth.logout();
+      mqtt.disconnect();
       if (mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
