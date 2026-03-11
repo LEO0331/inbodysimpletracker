@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ReportProvider()),
-        ChangeNotifierProvider(create: (_) => MqttProvider()..initMqtt()),
+        ChangeNotifierProvider(create: (_) => MqttProvider()),
       ],
       child: MaterialApp(
         title: 'InBody Tracker',

@@ -62,7 +62,16 @@ class _DashboardPageState extends State<DashboardPage> {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text("InBody Dashboard"),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("InBody Dashboard"),
+            SelectableText(
+              "UID: ${user.uid}", 
+              style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+            ),
+          ],
+        ),
         elevation: 0,
         actions: [
           // ✅ MQTT 連線狀態指示燈
