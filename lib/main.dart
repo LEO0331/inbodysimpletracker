@@ -13,6 +13,7 @@ import 'presentation/auth/login_page.dart';
 import 'presentation/auth/signup_page.dart';
 import 'presentation/dashboard/dashboard_page.dart';
 import 'presentation/upload/upload_page.dart';
+import 'package:inbodysimpletracker/logic/providers/mqtt_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +32,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ReportProvider()),
+        ChangeNotifierProvider(create: (_) => MqttProvider()..initMqtt()),
       ],
       child: MaterialApp(
         title: 'InBody Tracker',

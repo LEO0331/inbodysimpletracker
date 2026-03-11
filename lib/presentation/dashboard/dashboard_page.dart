@@ -5,8 +5,9 @@ import 'package:intl/intl.dart';
 import 'dart:developer' as developer;
 
 import '../../logic/providers/auth_provider.dart';
+import '../../logic/providers/mqtt_provider.dart'; // ✅ 新增：MQTT Provider
 import '../../data/models/inbody_report.dart';
-import 'progress_chart.dart'; // 確保已更新為帶有 targetWeight 的 InbodyChart
+import 'progress_chart.dart';
 import 'report_card.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -18,7 +19,7 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   String _selectedMetric = "weight";
-  String _dateFilter = "All"; // ✅ 新增：日期篩選初始值
+  String _dateFilter = "All";
   final ScrollController _mainScrollController = ScrollController();
 
   @override
@@ -27,7 +28,6 @@ class _DashboardPageState extends State<DashboardPage> {
     super.dispose();
   }
 
-  // 彈出全螢幕分析 (略，維持原本邏輯)
   void _showFullHistoryChart(List<InbodyReport> reports) {
     showDialog(
       context: context,
@@ -49,12 +49,35 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    // ✅ 監聽 MQTT 狀態與數據
+    final mqtt = Provider.of<MqttProvider>(context);
     final user = auth.user;
 
     if (user == null) return const Scaffold(body: Center(child: Text("Please login")));
 
     return Scaffold(
-      appBar: AppBar(title: const Text("InBody Dashboard"), elevation: 0),
+      appBar: AppBar(
+        title: const Text("InBody Dashboard"),
+        elevation: 0,
+        actions: [
+          // ✅ MQTT 連線狀態指示燈
+          Row(
+            children: [
+              Text(
+                mqtt.isConnected ? "MQTT Live" : "Offline",
+                style: TextStyle(fontSize: 12, color: mqtt.isConnected ? Colors.green : Colors.grey),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.circle,
+                color: mqtt.isConnected ? Colors.green : Colors.red,
+                size: 12,
+              ),
+              const SizedBox(width: 16),
+            ],
+          ),
+        ],
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("users")
@@ -67,8 +90,7 @@ class _DashboardPageState extends State<DashboardPage> {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
 
           final docs = snapshot.data?.docs ?? [];
-          if (docs.isEmpty) return const Center(child: Text("No reports yet."));
-
+          
           // 1. 原始資料解析
           final List<InbodyReport> allReports = [];
           for (var doc in docs) {
@@ -78,7 +100,7 @@ class _DashboardPageState extends State<DashboardPage> {
             } catch (e) { developer.log("Parsing error", error: e); }
           }
 
-          // 2. ✅ 日期過濾邏輯
+          // 2. 日期過濾邏輯
           final now = DateTime.now();
           final List<InbodyReport> filteredReports = allReports.where((r) {
             if (_dateFilter == "3 Months") {
@@ -86,7 +108,7 @@ class _DashboardPageState extends State<DashboardPage> {
             } else if (_dateFilter == "6 Months") {
               return r.reportDate.isAfter(now.subtract(const Duration(days: 180)));
             }
-            return true; // All
+            return true;
           }).toList();
 
           final chartReports = filteredReports.reversed.toList();
@@ -99,16 +121,17 @@ class _DashboardPageState extends State<DashboardPage> {
               padding: const EdgeInsets.only(bottom: 40),
               child: Column(
                 children: [
-                  // Summary Cards...
+                  // ✅ 3. 新增：MQTT 即時數據展示區 (只在有新數據時顯示)
+                  if (mqtt.mqttReports.isNotEmpty) _buildMqttLiveSection(mqtt.mqttReports.first),
+
                   _buildTopSummary(filteredReports),
 
-                  // ✅ 指標切換與日期篩選下拉選單
+                  // 指標切換與日期篩選
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // 指標切換 (左側)
                         Expanded(
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
@@ -124,7 +147,6 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        // 🗓️ 日期篩選器 (右側)
                         DropdownButton<String>(
                           value: _dateFilter,
                           style: const TextStyle(fontSize: 14, color: Colors.blue, fontWeight: FontWeight.bold),
@@ -150,13 +172,17 @@ class _DashboardPageState extends State<DashboardPage> {
                           child: InbodyChart(
                             reports: chartReports,
                             metric: _selectedMetric,
-                            targetWeight: 70.0, // 👈 ✅ 可以在這裡設定目標體重
+                            targetWeight: 70.0,
                           ),
                         ),
                       ),
+                    )
+                  else if (docs.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(32.0),
+                      child: Text("No history reports yet."),
                     ),
 
-                  // History List... (使用 filteredReports)
                   _buildHistoryList(filteredReports),
                 ],
               ),
@@ -167,7 +193,51 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // 輔助方法：頂部總覽 (簡化示範)
+  // ✅ 新增：MQTT 即時數據 UI 區塊
+  Widget _buildMqttLiveSection(InbodyReport latestReport) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [Colors.blue.shade50, Colors.white]),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.sensors, color: Colors.blueAccent),
+              const SizedBox(width: 8),
+              const Text("📡 Live MQTT Data (Recent Scan)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+              const Spacer(),
+              Text(DateFormat('HH:mm:ss').format(latestReport.reportDate), style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+          const Divider(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildLiveMetric("Weight", "${latestReport.weight} kg"),
+              _buildLiveMetric("Fat %", "${latestReport.bodyFatPercent} %"),
+              _buildLiveMetric("Muscle", "${latestReport.muscleMass} kg"),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLiveMetric(String label, String value) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
+      ],
+    );
+  }
+
   Widget _buildTopSummary(List<InbodyReport> reports) {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -181,7 +251,32 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // 輔助方法：歷史列表
+  Widget _buildSummaryCard({required String title, required String value, required IconData icon, required Color color}) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        child: Column(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetricChip(String metric, String label) {
+    bool isSelected = _selectedMetric == metric;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (val) { if (val) setState(() => _selectedMetric = metric); },
+    );
+  }
+
   Widget _buildHistoryList(List<InbodyReport> reports) {
     return Column(
       children: [
@@ -205,28 +300,6 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
       ],
-    );
-  }
-
-  // 其餘 _buildSummaryCard, _buildMetricChip 保持不變...
-  Widget _buildSummaryCard({required String title, required String value, required IconData icon, required Color color}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 8),
-        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-        Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-      ]),
-    );
-  }
-
-  Widget _buildMetricChip(String metric, String label) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: _selectedMetric == metric,
-      onSelected: (val) { if (val) setState(() => _selectedMetric = metric); },
     );
   }
 }
