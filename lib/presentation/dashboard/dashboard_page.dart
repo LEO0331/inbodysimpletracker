@@ -55,6 +55,11 @@ class _DashboardPageState extends State<DashboardPage> {
 
     if (user == null) return const Scaffold(body: Center(child: Text("Please login")));
 
+    if (!mqtt.isConnected && !mqtt.isLoading) {
+      // 建議在微任務中執行，避免在 build 期間呼叫 notifyListeners
+      Future.microtask(() => mqtt.initMqtt(user.uid));
+    }
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text("InBody Dashboard"),

@@ -25,8 +25,11 @@ class MqttProvider with ChangeNotifier {
     try {
       await _client!.connect();
       _isConnected = true;
-      _client!.subscribe("inbody/reports/json", MqttQos.atLeastOnce);
       
+    final String userTopic = "inbody/users/$uid/data";
+    _client!.subscribe(userTopic, MqttQos.atLeastOnce);
+    
+    developer.log("Subscribed to: $userTopic");      
       _client!.updates!.listen((List<MqttReceivedMessage<MqttMessage>> c) {
         // ✅ 修正語法錯誤：c 是一個 List，必須存取第一個元素 [0]
         final MqttPublishMessage recMess = c[0].payload as MqttPublishMessage;
