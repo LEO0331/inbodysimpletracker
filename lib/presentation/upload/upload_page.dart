@@ -14,6 +14,7 @@ import '../../logic/providers/auth_provider.dart';
 import '../../data/models/inbody_report.dart';
 import '../dashboard/dashboard_page.dart';
 import '../../core/services/ocr_service.dart';
+import '../../core/utils/inbody_parser.dart';
 
 class UploadPage extends StatefulWidget {
   const UploadPage({super.key});
@@ -98,7 +99,7 @@ class _UploadPageState extends State<UploadPage> {
       });
 
       if (recognizedText.isNotEmpty) {
-        final metrics = _parseMetrics(recognizedText);
+        final metrics = InbodyParser.parse(recognizedText);
         setState(() => _parsedMetrics = metrics);
 
         // If we got useful data, auto-save
@@ -142,7 +143,7 @@ class _UploadPageState extends State<UploadPage> {
       });
 
       if (extractedText.isNotEmpty) {
-        final metrics = _parseMetrics(extractedText);
+        final metrics = InbodyParser.parse(extractedText);
         setState(() => _parsedMetrics = metrics);
 
         if (metrics["weight"] != 0.0 ||
@@ -257,26 +258,6 @@ class _UploadPageState extends State<UploadPage> {
     }
   }
 
-  // ===== Regex parsing =====
-  Map<String, dynamic> _parseMetrics(String text) {
-    final weightRegex = RegExp(r'Weight[:\s]*([\d.]+)');
-    final fatRegex = RegExp(r'Body\s*Fat[:\s]*([\d.]+)');
-    final muscleRegex = RegExp(r'Muscle\s*Mass[:\s]*([\d.]+)');
-    final visceralRegex = RegExp(r'Visceral\s*Fat[:\s]*([\d.]+)');
-
-    double getValue(RegExp regex) {
-      final match = regex.firstMatch(text);
-      return match != null ? (double.tryParse(match.group(1)!) ?? 0.0) : 0.0;
-    }
-
-    return {
-      "weight": getValue(weightRegex),
-      "bodyFatPercent": getValue(fatRegex),
-      "muscleMass": getValue(muscleRegex),
-      "visceralFat": getValue(visceralRegex),
-      "reportDate": DateTime.now().toIso8601String(),
-    };
-  }
 
   // ===== Logout =====
   Future<void> _handleLogout() async {

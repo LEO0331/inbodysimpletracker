@@ -24,8 +24,9 @@ void main() {
     when(() => mockUser.email).thenReturn('test@example.com');
     when(() => mockUser.uid).thenReturn('uid_123');
 
-    // 模擬 AuthService 的 Stream
+    // 模擬 AuthService 的 Stream 與 currentUser
     when(() => mockAuthService.userChanges).thenAnswer((_) => userStreamController.stream);
+    when(() => mockAuthService.currentUser).thenReturn(null);
 
     // 注入 Mock 到 Provider
     authProvider = AuthProvider(authService: mockAuthService);

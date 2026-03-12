@@ -21,7 +21,7 @@ class AuthProvider with ChangeNotifier {
 
   AuthProvider({AuthService? authService}) 
     : _authService = authService ?? AuthService() {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = _authService.currentUser;
     _user = currentUser;
     _isAuthenticated = currentUser != null;
     // Monitor auth state changes
