@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:developer' as developer;
@@ -10,6 +13,7 @@ import '../../logic/providers/mqtt_provider.dart';
 import '../../logic/providers/auth_provider.dart';
 import '../../data/models/inbody_report.dart';
 import '../dashboard/dashboard_page.dart';
+import '../../core/services/ocr_service.dart';
 
 class UploadPage extends StatefulWidget {
   const UploadPage({super.key});
@@ -20,65 +24,158 @@ class UploadPage extends StatefulWidget {
 
 class _UploadPageState extends State<UploadPage> {
   XFile? _imageFile;
-  Uint8List? _webImage;
+  Uint8List? _fileBytes;
   String _extractedText = "";
   Map<String, dynamic> _parsedMetrics = {};
+  bool _isProcessing = false;
+  String? _selectedFileName;
+  bool _isPdf = false;
 
   final ImagePicker _picker = ImagePicker();
   final textRecognizer = TextRecognizer();
 
-  // 1. 選擇圖片與平台判斷邏輯
-  Future<void> _pickImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      if (kIsWeb) {
-        final bytes = await pickedFile.readAsBytes();
-        setState(() {
-          _webImage = bytes;
-          _imageFile = pickedFile;
-          _extractedText = "The web platform does not currently support automatic recognition. Please click the button below to manually enter the data.";
-        });
-        // Web 直接彈出輸入視窗
-        _showManualInputDialog();
-      } else {
-        setState(() {
-          _imageFile = pickedFile;
-        });
-        await _processImage(pickedFile);
+  // ===== Unified file picker: supports images AND PDFs =====
+  Future<void> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'pdf'],
+      withData: true, // needed for web to get bytes
+    );
+
+    if (result != null && result.files.isNotEmpty) {
+      final file = result.files.first;
+      final bytes = file.bytes;
+      final name = file.name.toLowerCase();
+      final isPdf = name.endsWith('.pdf');
+
+      setState(() {
+        _fileBytes = bytes;
+        _selectedFileName = file.name;
+        _isPdf = isPdf;
+        _imageFile = null; // clear old image_picker reference
+        _extractedText = "";
+        _parsedMetrics = {};
+      });
+
+      if (bytes != null) {
+        if (isPdf) {
+          await _processPdf(bytes);
+        } else {
+          await _processImageBytes(bytes, kIsWeb ? null : file.path);
+        }
       }
     }
   }
 
-  // 2. 行動裝置 OCR 處理邏輯
-  Future<void> _processImage(XFile imageFile) async {
-    if (kIsWeb) return;
+  // ===== Process image on all platforms =====
+  Future<void> _processImageBytes(Uint8List bytes, String? filePath) async {
+    setState(() => _isProcessing = true);
 
     try {
-      final inputImage = InputImage.fromFilePath(imageFile.path);
-      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+      String recognizedText = "";
+
+      if (kIsWeb) {
+        // Web: use Tesseract.js via JS interop
+        recognizedText = await webOcrRecognize(bytes);
+      } else {
+        // Mobile: use Google ML Kit
+        if (filePath != null) {
+          final inputImage = InputImage.fromFilePath(filePath);
+          final RecognizedText result =
+              await textRecognizer.processImage(inputImage);
+          recognizedText = result.text;
+        } else {
+        // 如果 Mobile 拿到 bytes 但沒 path (例如從某些來源)，ML Kit 也支援 bytes
+        // 但通常 FilePicker 在 Mobile 會提供 path
+        recognizedText = "Error: Missing file path on mobile.";
+      }
+      }
 
       setState(() {
-        _extractedText = recognizedText.text;
+        _extractedText = recognizedText.isNotEmpty
+            ? recognizedText
+            : "No text recognized. Please use manual entry.";
       });
 
-      final metrics = _parseMetrics(recognizedText.text);
-      setState(() {
-        _parsedMetrics = metrics;
-      });
+      if (recognizedText.isNotEmpty) {
+        final metrics = _parseMetrics(recognizedText);
+        setState(() => _parsedMetrics = metrics);
 
-      // 自動儲存至 Firestore
-      await _saveReportToFirestore(metrics);
+        // If we got useful data, auto-save
+        if (metrics["weight"] != 0.0 ||
+            metrics["bodyFatPercent"] != 0.0 ||
+            metrics["muscleMass"] != 0.0) {
+          await _saveReportToFirestore(metrics);
+        } else {
+          // Parsed but no useful metrics → show manual input
+          _showManualInputDialog();
+        }
+      } else {
+        // No text → manual entry
+        _showManualInputDialog();
+      }
     } catch (e) {
       developer.log("OCR Error", error: e, name: "upload_page");
+      setState(() {
+        _extractedText = "OCR failed: $e\nPlease use manual entry.";
+      });
+      _showManualInputDialog();
+    } finally {
+      setState(() => _isProcessing = false);
     }
   }
 
-  // 3. 手動輸入對話框 (用於 Web 或辨識失敗時)
+  // ===== Process PDF using Syncfusion (works on web + mobile) =====
+  Future<void> _processPdf(Uint8List bytes) async {
+    setState(() => _isProcessing = true);
+
+    try {
+      final PdfDocument document = PdfDocument(inputBytes: bytes);
+      final PdfTextExtractor textExtractor = PdfTextExtractor(document);
+      String extractedText = textExtractor.extractText();
+      document.dispose();
+
+      setState(() {
+        _extractedText = extractedText.isNotEmpty
+            ? extractedText
+            : "No text found in PDF. Please use manual entry.";
+      });
+
+      if (extractedText.isNotEmpty) {
+        final metrics = _parseMetrics(extractedText);
+        setState(() => _parsedMetrics = metrics);
+
+        if (metrics["weight"] != 0.0 ||
+            metrics["bodyFatPercent"] != 0.0 ||
+            metrics["muscleMass"] != 0.0) {
+          await _saveReportToFirestore(metrics);
+        } else {
+          _showManualInputDialog();
+        }
+      } else {
+        _showManualInputDialog();
+      }
+    } catch (e) {
+      developer.log("PDF Extract Error", error: e, name: "upload_page");
+      setState(() {
+        _extractedText = "PDF extraction failed: $e\nPlease use manual entry.";
+      });
+      _showManualInputDialog();
+    } finally {
+      setState(() => _isProcessing = false);
+    }
+  }
+
+  // ===== Manual input dialog (fallback) =====
   Future<void> _showManualInputDialog() async {
-    final weightController = TextEditingController(text: _parsedMetrics["weight"]?.toString());
-    final fatController = TextEditingController(text: _parsedMetrics["bodyFatPercent"]?.toString());
-    final muscleController = TextEditingController(text: _parsedMetrics["muscleMass"]?.toString());
-    final visceralController = TextEditingController(text: _parsedMetrics["visceralFat"]?.toString());
+    final weightController =
+        TextEditingController(text: _parsedMetrics["weight"]?.toString());
+    final fatController =
+        TextEditingController(text: _parsedMetrics["bodyFatPercent"]?.toString());
+    final muscleController =
+        TextEditingController(text: _parsedMetrics["muscleMass"]?.toString());
+    final visceralController =
+        TextEditingController(text: _parsedMetrics["visceralFat"]?.toString());
 
     return showDialog(
       context: context,
@@ -89,15 +186,21 @@ class _UploadPageState extends State<UploadPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildManualTextField(weightController, "weight (kg)", Icons.monitor_weight),
-              _buildManualTextField(fatController, "bodyFatPercent (%)", Icons.pie_chart),
-              _buildManualTextField(muscleController, "muscleMass (kg)", Icons.fitness_center),
-              _buildManualTextField(visceralController, "visceralFat", Icons.opacity),
+              _buildManualTextField(
+                  weightController, "weight (kg)", Icons.monitor_weight),
+              _buildManualTextField(
+                  fatController, "bodyFatPercent (%)", Icons.pie_chart),
+              _buildManualTextField(
+                  muscleController, "muscleMass (kg)", Icons.fitness_center),
+              _buildManualTextField(
+                  visceralController, "visceralFat", Icons.opacity),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("cancel")),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("cancel")),
           ElevatedButton(
             onPressed: () async {
               final metrics = {
@@ -120,11 +223,12 @@ class _UploadPageState extends State<UploadPage> {
     );
   }
 
-  // 4. 儲存至 Firestore 的統一方法
+  // ===== Save to Firestore =====
   Future<void> _saveReportToFirestore(Map<String, dynamic> metrics) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     if (auth.user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("please login to save reports")));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("please login to save reports")));
       return;
     }
 
@@ -145,14 +249,15 @@ class _UploadPageState extends State<UploadPage> {
           .add(report.toMap());
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("The data has been successfully saved to the cloud.")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("The data has been successfully saved to the cloud.")));
       }
     } catch (e) {
       developer.log("Firestore Save Error", error: e, name: "upload_page");
     }
   }
 
-  // 輔助：正則表達式解析
+  // ===== Regex parsing =====
   Map<String, dynamic> _parseMetrics(String text) {
     final weightRegex = RegExp(r'Weight[:\s]*([\d.]+)');
     final fatRegex = RegExp(r'Body\s*Fat[:\s]*([\d.]+)');
@@ -173,7 +278,7 @@ class _UploadPageState extends State<UploadPage> {
     };
   }
 
-  // Handle logout
+  // ===== Logout =====
   Future<void> _handleLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -259,10 +364,12 @@ class _UploadPageState extends State<UploadPage> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Profile',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
                           Text(
                             auth.user?.email ?? 'Unknown',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.grey),
                           ),
                         ],
                       ),
@@ -289,7 +396,8 @@ class _UploadPageState extends State<UploadPage> {
                 backgroundColor: Theme.of(context).primaryColor,
                 child: Text(
                   (auth.user?.email?.substring(0, 1) ?? 'U').toUpperCase(),
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -308,38 +416,59 @@ class _UploadPageState extends State<UploadPage> {
                 border: Border.all(color: Colors.grey),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: _buildImagePreview(),
+              child: _buildFilePreview(),
             ),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 ElevatedButton.icon(
-                  icon: const Icon(Icons.photo_library),
-                  label: const Text("Select Image"),
-                  onPressed: _pickImage,
+                  icon: const Icon(Icons.upload_file),
+                  label: const Text("Upload Image / PDF"),
+                  onPressed: _isProcessing ? null : _pickFile,
                 ),
-                if (kIsWeb)
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.edit),
-                    label: const Text("Manual Entry"),
-                    onPressed: _showManualInputDialog,
-                  ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.edit),
+                  label: const Text("Manual Entry"),
+                  onPressed: _showManualInputDialog,
+                ),
               ],
             ),
+            if (_isProcessing) ...[
+              const SizedBox(height: 16),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 12),
+                  Text("Processing... please wait",
+                      style: TextStyle(color: Colors.blue)),
+                ],
+              ),
+            ],
             const SizedBox(height: 20),
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_extractedText, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    Text(_extractedText,
+                        style:
+                            const TextStyle(fontSize: 12, color: Colors.grey)),
                     const Divider(),
                     if (_parsedMetrics.isNotEmpty) ...[
-                      _buildMetricTile("weight", "${_parsedMetrics["weight"]} kg"),
-                      _buildMetricTile("bodyFatPercent", "${_parsedMetrics["bodyFatPercent"]} %"),
-                      _buildMetricTile("muscleMass", "${_parsedMetrics["muscleMass"]} kg"),
-                      _buildMetricTile("visceralFat", "${_parsedMetrics["visceralFat"]}"),
+                      _buildMetricTile(
+                          "weight", "${_parsedMetrics["weight"]} kg"),
+                      _buildMetricTile("bodyFatPercent",
+                          "${_parsedMetrics["bodyFatPercent"]} %"),
+                      _buildMetricTile(
+                          "muscleMass", "${_parsedMetrics["muscleMass"]} kg"),
+                      _buildMetricTile(
+                          "visceralFat", "${_parsedMetrics["visceralFat"]}"),
                     ],
                   ],
                 ),
@@ -351,32 +480,35 @@ class _UploadPageState extends State<UploadPage> {
     );
   }
 
-    // ✅ 1. 放大圖片預覽並優化顯示比例
-  Widget _buildImagePreview() {
-    if (_imageFile == null) {
+  // ===== File preview (images or PDF placeholder) =====
+  Widget _buildFilePreview() {
+    if (_fileBytes == null && _imageFile == null) {
       return Container(
-        color: Colors.grey[200], // 淺灰色背景，讓圖片邊緣清晰
+        color: Colors.grey[200],
         child: Stack(
           alignment: Alignment.center,
           children: [
             Image.asset(
               "assets/images/sample_report.jpg",
-              fit: BoxFit.contain, // 👈 改用 contain 確保長條形報告完整顯示
+              fit: BoxFit.contain,
               width: double.infinity,
             ),
-            // 加入一個半透明的小標籤，提示這是範例
             Positioned(
               top: 10,
               right: 10,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.black54,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Text(
                   "SAMPLE",
-                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -384,19 +516,43 @@ class _UploadPageState extends State<UploadPage> {
         ),
       );
     }
-    
-    // 選取圖片後的顯示
+
+    // PDF selected → show icon + filename
+    if (_isPdf) {
+      return Container(
+        color: Colors.grey[100],
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.picture_as_pdf, size: 80, color: Colors.red),
+              const SizedBox(height: 12),
+              Text(
+                _selectedFileName ?? "PDF File",
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Image selected
     return Container(
-      color: Colors.black, // 選取圖片後使用黑色背景，更有專業感
-      child: kIsWeb && _webImage != null
-          ? Image.memory(_webImage!, fit: BoxFit.contain)
-          : !kIsWeb
+      color: Colors.black,
+      child: _fileBytes != null
+          ? Image.memory(_fileBytes!, fit: BoxFit.contain)
+          : !kIsWeb && _imageFile != null
               ? Image.file(File(_imageFile!.path), fit: BoxFit.contain)
-              : const Center(child: Text("Failed to load preview.", style: TextStyle(color: Colors.white))),
+              : const Center(
+                  child: Text("Failed to load preview.",
+                      style: TextStyle(color: Colors.white))),
     );
   }
 
-  // ✅ 2. 優化數據顯示行 (加入色彩與間距)
+  // ===== Metric tile =====
   Widget _buildMetricTile(String label, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
@@ -410,9 +566,12 @@ class _UploadPageState extends State<UploadPage> {
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle_outline, size: 16, color: Colors.blue),
+              const Icon(Icons.check_circle_outline,
+                  size: 16, color: Colors.blue),
               const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+              Text(label,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w500, fontSize: 15)),
             ],
           ),
           Text(
@@ -428,10 +587,11 @@ class _UploadPageState extends State<UploadPage> {
     );
   }
 
-  // ✅ 3. 手動輸入文字框 (維持原樣並優化外觀)
-  Widget _buildManualTextField(TextEditingController controller, String label, IconData icon) {
+  // ===== Manual text field =====
+  Widget _buildManualTextField(
+      TextEditingController controller, String label, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16), // 增加間距
+      padding: const EdgeInsets.only(bottom: 16),
       child: TextField(
         controller: controller,
         autofocus: true,
@@ -451,5 +611,5 @@ class _UploadPageState extends State<UploadPage> {
         ),
       ),
     );
-  } 
+  }
 }
