@@ -17,7 +17,8 @@ import '../../core/services/ocr_service.dart';
 import '../../core/utils/inbody_parser.dart';
 
 class UploadPage extends StatefulWidget {
-  const UploadPage({super.key});
+  final FirebaseFirestore? firestore;
+  const UploadPage({super.key, this.firestore});
 
   @override
   State<UploadPage> createState() => _UploadPageState();
@@ -243,7 +244,7 @@ class _UploadPageState extends State<UploadPage> {
         visceralFat: (metrics["visceralFat"] as num).toDouble(),
       );
 
-      await FirebaseFirestore.instance
+      await (widget.firestore ?? FirebaseFirestore.instance)
           .collection("users")
           .doc(auth.user!.uid)
           .collection("reports")

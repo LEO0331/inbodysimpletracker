@@ -10,10 +10,13 @@ class ReportCard extends StatelessWidget {
   final InbodyReport report;
   final int index;
 
+  final FirebaseFirestore? firestore;
+
   const ReportCard({
     super.key,
     required this.report,
     required this.index,
+    this.firestore,
   });
 
   void _showDeleteDialog(BuildContext context) {
@@ -36,7 +39,7 @@ class ReportCard extends StatelessWidget {
           ElevatedButton(
             onPressed: () async {
               try {
-                await FirebaseFirestore.instance
+                await (firestore ?? FirebaseFirestore.instance)
                     .collection("users")
                     .doc(user.uid)
                     .collection("reports")

@@ -11,7 +11,8 @@ import 'progress_chart.dart';
 import 'report_card.dart';
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  final FirebaseFirestore? firestore;
+  const DashboardPage({super.key, this.firestore});
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -93,7 +94,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
+        stream: (widget.firestore ?? FirebaseFirestore.instance)
             .collection("users")
             .doc(user.uid)
             .collection("reports")

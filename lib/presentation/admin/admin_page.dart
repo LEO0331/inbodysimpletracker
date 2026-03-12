@@ -5,12 +5,13 @@ import 'package:intl/intl.dart';
 import '../../logic/providers/auth_provider.dart';
 
 class AdminPage extends StatelessWidget {
-  const AdminPage({super.key});
+  final FirebaseFirestore? firestore;
+  const AdminPage({super.key, this.firestore});
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
-    final FirebaseFirestore db = FirebaseFirestore.instance;
+    final FirebaseFirestore db = firestore ?? FirebaseFirestore.instance;
 
     // 🛡️ 安全防護：非管理員禁止進入
     if (!(auth.isAdmin ?? false)) {
