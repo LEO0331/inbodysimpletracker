@@ -399,8 +399,14 @@ flutter test --watch
 ## Test Statistics
 
 | Module | Tests | Coverage |
-|--------|-------|----------|
-| **Total** | **61** | **~93%** |
+| :--- | :---: | :---: |
+| `upload_page.dart` | 20 | 71.3% |
+| `auth_provider.dart` | 25 | 94.4% |
+| `login_page.dart` | 20 | 91.3% |
+| `signup_page.dart` | 20 | 95.1% |
+| **Total** | **85** | **~85.9%** |
+
+![Coverage Report](assets/images/demo11.png)
 
 ## Installation
 
