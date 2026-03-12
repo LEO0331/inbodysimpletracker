@@ -166,19 +166,17 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     const Text("Don't have an account? "),
                     TextButton(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SignupPage()),
-                        );
+                        Navigator.pushNamed(context, '/signup');
                       },
                       child: const Text(
-                        "Sign up",
+                        "Sign Up",
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),

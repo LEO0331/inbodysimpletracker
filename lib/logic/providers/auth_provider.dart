@@ -81,7 +81,10 @@ class AuthProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      _errorMessage = "Login failed. Please try again.";
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      if (_errorMessage == null || _errorMessage!.isEmpty) {
+        _errorMessage = "Login failed. Please try again.";
+      }
       developer.log(
         "Login error",
         name: "auth.provider",
@@ -123,7 +126,10 @@ class AuthProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      _errorMessage = "Signup failed. Please try again.";
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      if (_errorMessage == null || _errorMessage!.isEmpty) {
+        _errorMessage = "Signup failed. Please try again.";
+      }
       developer.log(
         "Signup error",
         name: "auth.provider",
@@ -143,7 +149,10 @@ class AuthProvider with ChangeNotifier {
       await _authService.signOut();
       // userChanges stream will handle state updates
     } catch (e) {
-      _errorMessage = "Logout failed";
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      if (_errorMessage == null || _errorMessage!.isEmpty) {
+        _errorMessage = "Logout failed";
+      }
       developer.log(
         "Logout error",
         name: "auth.provider",

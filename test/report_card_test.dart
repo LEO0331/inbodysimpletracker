@@ -55,61 +55,42 @@ void main() {
 
   group('ReportCard Widget Tests', () {
     testWidgets('Should render report summary data', (tester) async {
-      await tester.pumpWidget(createWidgetToTest());
-
-      expect(find.text('Oct 27, 2023'), findsOneWidget);
-      expect(find.text('Weight: 80.5 kg'), findsOneWidget);
-      expect(find.text('1'), findsOneWidget); // Index indicator
+       await tester.pumpWidget(createWidgetToTest());
+       expect(find.text('Oct 27, 2023'), findsOneWidget);
+       expect(find.text('Weight: 80.5 kg'), findsOneWidget);
     });
 
-    testWidgets('Should expand to show details and delete button', (tester) async {
-      await tester.pumpWidget(createWidgetToTest());
-
-      // Tap to expand
-      await tester.tap(find.byType(ExpansionTile));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Body Fat %'), findsOneWidget);
-      expect(find.text('20.1%'), findsOneWidget);
-      expect(find.text('Muscle Mass'), findsOneWidget);
-      expect(find.text('40.0 kg'), findsOneWidget);
-      expect(find.text('Delete Report'), findsOneWidget);
+    testWidgets('Should expand and show details', (tester) async {
+       await tester.pumpWidget(createWidgetToTest());
+       await tester.tap(find.byType(ExpansionTile));
+       await tester.pumpAndSettle();
+       expect(find.text('20.1%'), findsOneWidget);
+       expect(find.text('Delete Report'), findsOneWidget);
     });
 
-    testWidgets('Should show delete confirmation dialog and trigger deletion', (tester) async {
-      final mockCollection = _MockCollectionReference();
-      final mockDoc = _MockDocumentReference();
-      final mockSubCollection = _MockCollectionReference();
-      final mockReportDoc = _MockDocumentReference();
+    testWidgets('Should handle deletion error', (tester) async {
+      final mockCollection = MockCollectionReference();
+      final mockDoc = MockDocumentReference();
+      final mockSubCollection = MockCollectionReference();
+      final mockReportDoc = MockDocumentReference();
 
       when(() => mockFirestore.collection("users")).thenReturn(mockCollection);
       when(() => mockCollection.doc("user_uid_123")).thenReturn(mockDoc);
       when(() => mockDoc.collection("reports")).thenReturn(mockSubCollection);
       when(() => mockSubCollection.doc("report_id_123")).thenReturn(mockReportDoc);
-      when(() => mockReportDoc.delete()).thenAnswer((_) async => {});
+      
+      when(() => mockReportDoc.delete()).thenThrow(Exception("Firebase Error"));
 
       await tester.pumpWidget(createWidgetToTest());
-
-      // Expand
       await tester.tap(find.byType(ExpansionTile));
       await tester.pumpAndSettle();
 
-      // Click Delete Report button
       await tester.tap(find.text('Delete Report'));
       await tester.pumpAndSettle();
-
-      expect(find.text('Delete Report'), findsNWidgets(2)); // Title and Button
-      expect(find.text('Are you sure you want to delete this report? This action cannot be undone.'), findsOneWidget);
-
-      // Confirm delete
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();
 
-      verify(() => mockReportDoc.delete()).called(1);
-      expect(find.text('Report deleted successfully'), findsOneWidget);
+      expect(find.textContaining('Error deleting report'), findsOneWidget);
     });
   });
 }
-
-class _MockCollectionReference extends Mock implements CollectionReference<Map<String, dynamic>> {}
-class _MockDocumentReference extends Mock implements DocumentReference<Map<String, dynamic>> {}

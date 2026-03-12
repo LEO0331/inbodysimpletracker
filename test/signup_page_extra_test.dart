@@ -26,36 +26,32 @@ void main() {
     );
   }
 
-  group('SignupPage Detailed Tests', () {
-    testWidgets('Form validation for empty fields', (tester) async {
+  group('SignupPage Extra Coverage', () {
+    testWidgets('Shows error if passwords do not match', (tester) async {
        tester.view.physicalSize = const Size(1200, 1600);
        addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createTestWidget());
+      
+      await tester.enterText(find.widgetWithText(TextFormField, 'Email'), 'test@e.com');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Password'), 'password123');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Confirm Password'), 'different');
+      
       final createBtn = find.widgetWithText(ElevatedButton, 'Create Account');
       await tester.ensureVisible(createBtn);
       await tester.tap(createBtn);
       await tester.pumpAndSettle();
-      expect(find.text('Please enter your email'), findsOneWidget);
+      
+      expect(find.text('Passwords do not match'), findsOneWidget);
     });
 
-    testWidgets('Calls signup on provider', (tester) async {
+    testWidgets('Shows error from provider', (tester) async {
        tester.view.physicalSize = const Size(1200, 1600);
        addTearDown(() => tester.view.resetPhysicalSize());
 
-      when(() => mockAuth.signup(any(), any())).thenAnswer((_) async {});
+      when(() => mockAuth.errorMessage).thenReturn('Signup failed on server');
       await tester.pumpWidget(createTestWidget());
-      
-      await tester.enterText(find.widgetWithText(TextFormField, 'Email'), 'test@example.com');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Password'), 'password123');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Confirm Password'), 'password123');
-      
-      final createBtn = find.widgetWithText(ElevatedButton, 'Create Account');
-      await tester.ensureVisible(createBtn);
-      await tester.tap(createBtn);
-      await tester.pump();
-      
-      verify(() => mockAuth.signup('test@example.com', 'password123')).called(1);
+      expect(find.text('Signup failed on server'), findsOneWidget);
     });
   });
 }

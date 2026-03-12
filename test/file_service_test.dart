@@ -1,9 +1,12 @@
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:inbodysimpletracker/core/services/file_service.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 class MockTextRecognizer extends Mock implements TextRecognizer {}
+class MockRecognizedText extends Mock implements RecognizedText {}
+class MockInputImage extends Mock implements InputImage {}
 
 void main() {
   late FileService fileService;
@@ -21,5 +24,8 @@ void main() {
       fileService.dispose();
       verify(() => mockRecognizer.close()).called(1);
     });
+
+    // Note: recognizeImage and extractPdfText are hard to unit test 100% 
+    // without more complex mocking of static methods or platform channels.
   });
 }

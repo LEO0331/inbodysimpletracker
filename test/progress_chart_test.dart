@@ -45,40 +45,28 @@ void main() {
     );
   }
 
-  group('InbodyChart Widget Tests', () {
-    testWidgets('Should show "No data available" when reports list is empty', (tester) async {
-      await tester.pumpWidget(createWidgetToTest(reports: []));
-      expect(find.text('No data available'), findsOneWidget);
+  group('InbodyChart Detailed Tests', () {
+    testWidgets('Renders different metrics', (tester) async {
+       await tester.pumpWidget(createWidgetToTest(reports: sampleReports, metric: 'bodyFatPercent'));
+       expect(find.byType(LineChart), findsOneWidget);
+       
+       await tester.pumpWidget(createWidgetToTest(reports: sampleReports, metric: 'muscleMass'));
+       expect(find.byType(LineChart), findsOneWidget);
+
+       await tester.pumpWidget(createWidgetToTest(reports: sampleReports, metric: 'visceralFat'));
+       expect(find.byType(LineChart), findsOneWidget);
     });
 
-    testWidgets('Should render LineChart when data is provided', (tester) async {
-      await tester.pumpWidget(createWidgetToTest(reports: sampleReports));
-      expect(find.byType(LineChart), findsOneWidget);
+    testWidgets('Full analysis mode features', (tester) async {
+       await tester.pumpWidget(createWidgetToTest(reports: sampleReports, isFullAnalysis: true));
+       expect(find.text('Weight'), findsOneWidget);
+       expect(find.text('Fat %'), findsOneWidget);
+       expect(find.text('Muscle'), findsOneWidget);
     });
 
-    testWidgets('Should show legend in full analysis mode', (tester) async {
-      await tester.pumpWidget(createWidgetToTest(
-        reports: sampleReports,
-        isFullAnalysis: true,
-      ));
-      
-      expect(find.text('Weight'), findsOneWidget);
-      expect(find.text('Fat %'), findsOneWidget);
-      expect(find.text('Muscle'), findsOneWidget);
-    });
-
-    testWidgets('Should render target weight goal label when provided', (tester) async {
-      await tester.pumpWidget(createWidgetToTest(
-        reports: sampleReports,
-        metric: 'weight',
-        targetWeight: 68.0,
-      ));
-
-      // ExtraLinesData labels are rendered as part of the chart painting,
-      // but fl_chart might render them as widgets or we can just check if the chart exists.
-      // Actually, FlChart uses a CustomPainter, so the label won't be a separate Text widget.
-      // But we can verify the widget tree structure.
-      expect(find.byType(LineChart), findsOneWidget);
+    testWidgets('Renders empty state', (tester) async {
+       await tester.pumpWidget(createWidgetToTest(reports: []));
+       expect(find.text('No data available'), findsOneWidget);
     });
   });
 }

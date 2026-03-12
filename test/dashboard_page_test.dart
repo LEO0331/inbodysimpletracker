@@ -17,6 +17,7 @@ class MockCollectionReference extends Mock implements CollectionReference<Map<St
 class MockDocumentReference extends Mock implements DocumentReference<Map<String, dynamic>> {}
 class MockQuerySnapshot extends Mock implements QuerySnapshot<Map<String, dynamic>> {}
 class MockUser extends Mock implements User {}
+class MockQueryDocumentSnapshot extends Mock implements QueryDocumentSnapshot<Map<String, dynamic>> {}
 
 void main() {
   late MockAuthProvider mockAuth;
@@ -85,6 +86,25 @@ void main() {
       await (tester as WidgetTester).pumpAndSettle();
 
       expect(find.text('No history reports yet.'), findsOneWidget);
+    });
+
+    testWidgets('Should render report list when data exists', (tester) async {
+       final mockDoc = MockQueryDocumentSnapshot();
+       when(() => mockDoc.id).thenReturn('report_1');
+       when(() => mockDoc.data()).thenReturn({
+         'reportDate': Timestamp.now(),
+         'weight': 80.0,
+         'bodyFatPercent': 20.0,
+         'muscleMass': 40.0,
+       });
+       when(() => mockSnapshot.docs).thenReturn([mockDoc]);
+
+       await tester.pumpWidget(createWidgetToTest());
+       
+       streamController.add(mockSnapshot);
+       await tester.pumpAndSettle();
+
+       expect(find.text('Weight: 80.0 kg'), findsOneWidget);
     });
 
     testWidgets('Should handle full analysis dialog', (tester) async {

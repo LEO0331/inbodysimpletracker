@@ -377,7 +377,7 @@ class UploadPageState extends State<UploadPage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
@@ -391,8 +391,10 @@ class UploadPageState extends State<UploadPage> {
               child: _buildFilePreview(),
             ),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.spaceEvenly,
               children: [
                 ElevatedButton.icon(
                   icon: const Icon(Icons.upload_file),
@@ -408,43 +410,39 @@ class UploadPageState extends State<UploadPage> {
             ),
             if (_isProcessing) ...[
               const SizedBox(height: 16),
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  SizedBox(
+                  const SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   Text("Processing... please wait",
-                      style: TextStyle(color: Colors.blue)),
+                      style: TextStyle(color: Colors.blue[700])),
                 ],
               ),
             ],
             const SizedBox(height: 20),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_extractedText,
-                        style:
-                            const TextStyle(fontSize: 12, color: Colors.grey)),
-                    const Divider(),
-                    if (_parsedMetrics.isNotEmpty) ...[
-                      _buildMetricTile(
-                          "weight", "${_parsedMetrics["weight"]} kg"),
-                      _buildMetricTile("bodyFatPercent",
-                          "${_parsedMetrics["bodyFatPercent"]} %"),
-                      _buildMetricTile(
-                          "muscleMass", "${_parsedMetrics["muscleMass"]} kg"),
-                      _buildMetricTile(
-                          "visceralFat", "${_parsedMetrics["visceralFat"]}"),
-                    ],
-                  ],
-                ),
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_extractedText,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                const Divider(),
+                if (_parsedMetrics.isNotEmpty) ...[
+                  _buildMetricTile(
+                      "weight", "${_parsedMetrics["weight"]} kg"),
+                  _buildMetricTile("bodyFatPercent",
+                      "${_parsedMetrics["bodyFatPercent"]} %"),
+                  _buildMetricTile(
+                      "muscleMass", "${_parsedMetrics["muscleMass"]} kg"),
+                  _buildMetricTile(
+                      "visceralFat", "${_parsedMetrics["visceralFat"]}"),
+                ],
+              ],
             ),
           ],
         ),
@@ -536,15 +534,19 @@ class UploadPageState extends State<UploadPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.check_circle_outline,
-                  size: 16, color: Colors.blue),
-              const SizedBox(width: 8),
-              Text(label,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w500, fontSize: 15)),
-            ],
+          Expanded(
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_outline,
+                    size: 16, color: Colors.blue),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(label,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w500, fontSize: 15)),
+                ),
+              ],
+            ),
           ),
           Text(
             value,

@@ -18,11 +18,16 @@ void main() {
     mockMqtt = MockMqttProvider();
 
     when(() => mockAuth.isLoading).thenReturn(false);
+    when(() => mockAuth.isAuthenticated).thenReturn(false);
     when(() => mockAuth.errorMessage).thenReturn(null);
+    when(() => mockAuth.user).thenReturn(null);
+    
+    when(() => mockMqtt.isLoading).thenReturn(false);
+    when(() => mockMqtt.isConnected).thenReturn(false);
   });
 
-  testWidgets('LoginPage Basic Render', (tester) async {
-    await tester.pumpWidget(MaterialApp(
+  Widget createTestWidget() {
+    return MaterialApp(
       home: MultiProvider(
         providers: [
           ChangeNotifierProvider<AuthProvider>.value(value: mockAuth),
@@ -30,7 +35,47 @@ void main() {
         ],
         child: const LoginPage(),
       ),
-    ));
-    expect(find.byType(LoginPage), findsOneWidget);
+    );
+  }
+
+  group('LoginPage Detailed Tests', () {
+    testWidgets('Shows error message if login fails', (tester) async {
+       tester.view.physicalSize = const Size(1200, 1600);
+       addTearDown(() => tester.view.resetPhysicalSize());
+
+      when(() => mockAuth.errorMessage).thenReturn('Invalid credentials');
+      await tester.pumpWidget(createTestWidget());
+      expect(find.text('Invalid credentials'), findsOneWidget);
+    });
+
+    testWidgets('Form validation works', (tester) async {
+      tester.view.physicalSize = const Size(1200, 1600);
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createTestWidget());
+      final loginBtn = find.widgetWithText(ElevatedButton, 'Login');
+      await tester.ensureVisible(loginBtn);
+      await tester.tap(loginBtn);
+      await tester.pumpAndSettle();
+      expect(find.text('Please enter your email'), findsOneWidget);
+    });
+
+    testWidgets('Calls login with correct credentials', (tester) async {
+      tester.view.physicalSize = const Size(1200, 1600);
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      when(() => mockAuth.login(any(), any())).thenAnswer((_) async {});
+      await tester.pumpWidget(createTestWidget());
+      
+      await tester.enterText(find.widgetWithText(TextFormField, 'Email'), 'test@example.com');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Password'), 'password123');
+      
+      final loginBtn = find.widgetWithText(ElevatedButton, 'Login');
+      await tester.ensureVisible(loginBtn);
+      await tester.tap(loginBtn);
+      await tester.pump();
+      
+      verify(() => mockAuth.login('test@example.com', 'password123')).called(1);
+    });
   });
 }
