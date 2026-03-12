@@ -98867,6 +98867,7 @@ p=k.d
 o=p?"MQTT Live":"Offline"
 o=A.bA(o,m,m,m,A.eV(m,m,p?B.cX:B.iV,m,m,m,m,m,m,m,m,12,m,m,m,m,m,!0,m,m,m,m,m,m,m,m),m,m)
 r=A.wf(A.b([A.dF(A.b([o,B.eM,A.hr(B.KN,k.d?B.cX:B.aL,m,12),B.nC],r),B.z,B.C,B.E,0)],r),m,0,m,m,q)
+this.a.toString
 q=$.cz
 n=(q==null?$.cz=$.fz():q).ft("[DEFAULT]")
 A.cF(n,$.fc(),!0)
@@ -99507,6 +99508,7 @@ if(m.b==null){n.c.ah(t.Pu).f.v1(B.Xs)
 s=1
 break}p=4
 l=new A.t9("",A.aS4(a.i(0,"reportDate")),A.eF(a.i(0,"weight")),A.eF(a.i(0,"bodyFatPercent")),A.eF(a.i(0,"muscleMass")),A.eF(a.i(0,"visceralFat")))
+n.a.toString
 h=$.cz
 j=(h==null?$.cz=$.fz():h).ft("[DEFAULT]")
 A.cF(j,$.fc(),!0)
