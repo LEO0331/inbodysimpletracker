@@ -10,8 +10,12 @@ import '../../data/models/inbody_report.dart';
 import '../../data/services/firestore_service.dart';
 
 class MqttProvider with ChangeNotifier {
-  final FirestoreService _firestoreService = FirestoreService();
+  final FirestoreService _firestoreService;
   MqttClient? _client;
+
+  MqttProvider({FirestoreService? firestoreService, MqttClient? client})
+      : _firestoreService = firestoreService ?? FirestoreService(),
+        _client = client;
   
   List<InbodyReport> mqttReports = [];
   bool _isConnected = false;
@@ -35,8 +39,10 @@ class MqttProvider with ChangeNotifier {
     // ✅ 自定義 Topic 路徑 (發送端 MQTTX 需對應此路徑)
     final String userTopic = "inbody/users/$uid/data";
     final String statusTopic = "inbody/users/$uid/status";
-
-    _client = getMqttClient(broker, uniqueId);
+    
+    // ✅ Use injected client if available, otherwise create new
+    _client ??= getMqttClient(broker, uniqueId);
+    
     _client!.keepAlivePeriod = 20;
     
     // ✅ 設定連線訊息與遺囑 (Last Will)

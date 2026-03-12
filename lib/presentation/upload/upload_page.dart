@@ -15,16 +15,18 @@ import '../../data/models/inbody_report.dart';
 import '../dashboard/dashboard_page.dart';
 import '../../core/services/ocr_service.dart';
 import '../../core/utils/inbody_parser.dart';
+import '../../core/services/file_service.dart';
 
 class UploadPage extends StatefulWidget {
   final FirebaseFirestore? firestore;
-  const UploadPage({super.key, this.firestore});
+  final FileService? fileService;
+  const UploadPage({super.key, this.firestore, this.fileService});
 
   @override
-  State<UploadPage> createState() => _UploadPageState();
+  State<UploadPage> createState() => UploadPageState();
 }
 
-class _UploadPageState extends State<UploadPage> {
+class UploadPageState extends State<UploadPage> {
   XFile? _imageFile;
   Uint8List? _fileBytes;
   String _extractedText = "";
@@ -34,7 +36,13 @@ class _UploadPageState extends State<UploadPage> {
   bool _isPdf = false;
 
   final ImagePicker _picker = ImagePicker();
-  final textRecognizer = TextRecognizer();
+  late final FileService _fileService;
+
+  @override
+  void initState() {
+    super.initState();
+    _fileService = widget.fileService ?? FileService();
+  }
 
   // ===== Unified file picker: supports images AND PDFs =====
   Future<void> _pickFile() async {
@@ -61,37 +69,21 @@ class _UploadPageState extends State<UploadPage> {
 
       if (bytes != null) {
         if (isPdf) {
-          await _processPdf(bytes);
+          await processPdf(bytes);
         } else {
-          await _processImageBytes(bytes, kIsWeb ? null : file.path);
+          await processImageBytes(bytes, kIsWeb ? null : file.path);
         }
       }
     }
   }
 
   // ===== Process image on all platforms =====
-  Future<void> _processImageBytes(Uint8List bytes, String? filePath) async {
+  @visibleForTesting
+  Future<void> processImageBytes(Uint8List bytes, String? filePath) async {
     setState(() => _isProcessing = true);
 
     try {
-      String recognizedText = "";
-
-      if (kIsWeb) {
-        // Web: use Tesseract.js via JS interop
-        recognizedText = await webOcrRecognize(bytes);
-      } else {
-        // Mobile: use Google ML Kit
-        if (filePath != null) {
-          final inputImage = InputImage.fromFilePath(filePath);
-          final RecognizedText result =
-              await textRecognizer.processImage(inputImage);
-          recognizedText = result.text;
-        } else {
-        // 如果 Mobile 拿到 bytes 但沒 path (例如從某些來源)，ML Kit 也支援 bytes
-        // 但通常 FilePicker 在 Mobile 會提供 path
-        recognizedText = "Error: Missing file path on mobile.";
-      }
-      }
+      String recognizedText = await _fileService.recognizeImage(bytes, filePath);
 
       setState(() {
         _extractedText = recognizedText.isNotEmpty
@@ -128,14 +120,12 @@ class _UploadPageState extends State<UploadPage> {
   }
 
   // ===== Process PDF using Syncfusion (works on web + mobile) =====
-  Future<void> _processPdf(Uint8List bytes) async {
+  @visibleForTesting
+  Future<void> processPdf(Uint8List bytes) async {
     setState(() => _isProcessing = true);
 
     try {
-      final PdfDocument document = PdfDocument(inputBytes: bytes);
-      final PdfTextExtractor textExtractor = PdfTextExtractor(document);
-      String extractedText = textExtractor.extractText();
-      document.dispose();
+      String extractedText = await _fileService.extractPdfText(bytes);
 
       setState(() {
         _extractedText = extractedText.isNotEmpty
@@ -296,8 +286,8 @@ class _UploadPageState extends State<UploadPage> {
 
   @override
   void dispose() {
-    if (!kIsWeb) {
-      textRecognizer.close();
+    if (widget.fileService == null) {
+      _fileService.dispose();
     }
     super.dispose();
   }

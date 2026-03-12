@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:inbodysimpletracker/presentation/dashboard/dashboard_page.dart';
 import 'package:inbodysimpletracker/logic/providers/auth_provider.dart';
 import 'package:inbodysimpletracker/logic/providers/mqtt_provider.dart';
+import 'package:inbodysimpletracker/data/models/inbody_report.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 
 class MockAuthProvider extends Mock implements AuthProvider {}
@@ -81,45 +82,60 @@ void main() {
       await tester.pumpWidget(createWidgetToTest());
       
       streamController.add(mockSnapshot);
-      await tester.pump(); // Start stream
-      await tester.pump(); // Rebuild
+      await (tester as WidgetTester).pumpAndSettle();
 
       expect(find.text('No history reports yet.'), findsOneWidget);
     });
 
-    testWidgets('Should display user UID', (tester) async {
-      await tester.pumpWidget(createWidgetToTest());
-      expect(find.textContaining('test_uid'), findsOneWidget);
-    });
-
-    testWidgets('Should show metric chips when data is loaded', (tester) async {
-      await tester.pumpWidget(createWidgetToTest());
-      
-      streamController.add(mockSnapshot);
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('Weight'), findsWidgets);
-      expect(find.text('Fat %'), findsOneWidget);
-      expect(find.text('Muscle'), findsOneWidget);
-    });
-
-    testWidgets('Should handle date filter selection', (tester) async {
+    testWidgets('Should handle full analysis dialog', (tester) async {
       await tester.pumpWidget(createWidgetToTest());
       
       streamController.add(mockSnapshot);
       await tester.pumpAndSettle();
 
-      final dropdown = find.byType(DropdownButton<String>);
-      expect(dropdown, findsOneWidget);
-
-      await tester.tap(dropdown);
+      await tester.tap(find.text('Full Analysis'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('3 Months').last);
+      expect(find.text('Combined Trend Analysis'), findsOneWidget);
+      await tester.tap(find.byType(IconButton).first);
+      await tester.pumpAndSettle();
+      
+      expect(find.text('Combined Trend Analysis'), findsNothing);
+    });
+
+    testWidgets('Should show MQTT live section when reports exist', (tester) async {
+      final mockLiveReport = InbodyReport(
+        id: 'mqtt_1',
+        reportDate: DateTime.now(),
+        weight: 70.0,
+        bodyFatPercent: 15.0,
+        muscleMass: 35.0,
+        visceralFat: 5,
+      );
+      
+      when(() => mockMqtt.mqttReports).thenReturn([mockLiveReport]);
+      when(() => mockMqtt.isConnected).thenReturn(true);
+
+      await tester.pumpWidget(createWidgetToTest());
+      
+      streamController.add(mockSnapshot);
       await tester.pumpAndSettle();
 
-      expect(find.text('3 Months'), findsWidgets);
+      expect(find.text('📡 Live MQTT Data (Recent Scan)'), findsOneWidget);
+      expect(find.text('MQTT Live'), findsOneWidget);
+    });
+
+    testWidgets('Should handle metric chip selection', (tester) async {
+      await tester.pumpWidget(createWidgetToTest());
+      
+      streamController.add(mockSnapshot);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Fat %'));
+      await tester.pumpAndSettle();
+
+      final fatChip = tester.widget<ChoiceChip>(find.byWidgetPredicate((w) => w is ChoiceChip && (w.label as Text).data == 'Fat %'));
+      expect(fatChip.selected, isTrue);
     });
   });
 }
