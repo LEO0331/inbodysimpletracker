@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../logic/providers/auth_provider.dart';
-import '../../logic/providers/mqtt_provider.dart';
+
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -15,11 +15,13 @@ class HomePage extends StatelessWidget {
             title: const Text('InBody Tracker'),
             elevation: 0,
             // ✅ 修正點 2：已登入則顯示漢堡選單 (Drawer)，未登入則不顯示
-            leading: auth.isAuthenticated 
-                ? Builder(builder: (context) => IconButton(
-                    icon: const Icon(Icons.menu),
-                    onPressed: () => Scaffold.of(context).openDrawer(),
-                  ))
+            leading: auth.isAuthenticated
+                ? Builder(
+                    builder: (context) => IconButton(
+                      icon: const Icon(Icons.menu),
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                    ),
+                  )
                 : null,
           ),
           // ✅ 修正點 3：側邊欄只在登入時載入
@@ -38,20 +40,20 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    auth.isAuthenticated 
-                        ? 'Hello, ${auth.user?.email?.split('@')[0]}!' 
+                    auth.isAuthenticated
+                        ? 'Hello, ${auth.user?.email?.split('@')[0]}!'
                         : 'Welcome to InBody Tracker',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'Track your fitness journey by scanning InBody reports',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[600],
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 60),
@@ -72,7 +74,8 @@ class HomePage extends StatelessWidget {
                       icon: Icons.dashboard,
                       color: Colors.green[600]!,
                       isOutlined: true,
-                      onPressed: () => Navigator.pushNamed(context, '/dashboard'),
+                      onPressed: () =>
+                          Navigator.pushNamed(context, '/dashboard'),
                     ),
                   ] else ...[
                     _buildActionButton(
@@ -97,7 +100,8 @@ class HomePage extends StatelessWidget {
                   _buildFeatureCard(
                     icon: Icons.camera,
                     title: 'Smart Scan',
-                    description: 'Automatically extract data from InBody reports',
+                    description:
+                        'Automatically extract data from InBody reports',
                   ),
                   const SizedBox(height: 12),
                   _buildFeatureCard(
@@ -122,7 +126,6 @@ class HomePage extends StatelessWidget {
 
   // 側邊欄組件
   Widget _buildDrawer(BuildContext context, AuthProvider auth) {
-    final mqtt = Provider.of<MqttProvider>(context, listen: false);
     return Drawer(
       child: Column(
         children: [
@@ -137,7 +140,9 @@ class HomePage extends StatelessWidget {
                 size: 40,
               ),
             ),
-            decoration: BoxDecoration(color: auth.isAdmin ? Colors.red : Colors.blue),
+            decoration: BoxDecoration(
+              color: auth.isAdmin ? Colors.red : Colors.blue,
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.home),
@@ -163,8 +168,17 @@ class HomePage extends StatelessWidget {
           const Divider(),
           if (auth.isAdmin)
             ListTile(
-              leading: const Icon(Icons.admin_panel_settings, color: Colors.red),
-              title: const Text("Admin Dashboard", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              leading: const Icon(
+                Icons.admin_panel_settings,
+                color: Colors.red,
+              ),
+              title: const Text(
+                "Admin Dashboard",
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.pushNamed(context, '/admin');
@@ -176,9 +190,10 @@ class HomePage extends StatelessWidget {
             title: const Text("Logout"),
             onTap: () async {
               await auth.logout();
-              mqtt.disconnect();
               if (context.mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                Navigator.of(
+                  context,
+                ).pushNamedAndRemoveUntil('/', (route) => false);
               }
             },
           ),
@@ -189,8 +204,14 @@ class HomePage extends StatelessWidget {
   }
 
   // 輔助方法：動作按鈕
-  Widget _buildActionButton(BuildContext context,
-      {required String label, required IconData icon, required Color color, bool isOutlined = false, required VoidCallback onPressed}) {
+  Widget _buildActionButton(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required Color color,
+    bool isOutlined = false,
+    required VoidCallback onPressed,
+  }) {
     return SizedBox(
       width: double.infinity,
       height: 56,
@@ -201,7 +222,9 @@ class HomePage extends StatelessWidget {
               label: Text(label, style: TextStyle(color: color, fontSize: 16)),
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: color, width: 2),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             )
           : ElevatedButton.icon(
@@ -211,17 +234,26 @@ class HomePage extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: color,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
     );
   }
 
   // 輔助方法：功能卡片
-  Widget _buildFeatureCard({required IconData icon, required String title, required String description}) {
+  Widget _buildFeatureCard({
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         children: [
           Icon(icon, size: 32, color: Colors.blue[600]),
@@ -230,9 +262,18 @@ class HomePage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(description, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                Text(
+                  description,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
               ],
             ),
           ),

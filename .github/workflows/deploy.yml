@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      BASE_HREF: /inbodysimpletracker/
     steps:
       - uses: actions/checkout@v4
 
@@ -16,13 +18,28 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          # flutter-version: '3.40.0' # 可選：指定版本
+          cache: true
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Web
-        run: flutter build web --release --base-href "/inbodysimpletracker/"
+      - name: Build Web (small first-load profile)
+        run: |
+          flutter build web \
+            --release \
+            --base-href "${BASE_HREF}" \
+            --optimization-level=4 \
+            --no-source-maps \
+            --no-web-resources-cdn \
+            --no-wasm-dry-run
+
+      - name: Remove sourcemaps fallback (if any)
+        run: find build/web -name "*.map" -type f -delete
+
+      - name: Web bundle size report
+        run: |
+          echo "Top 20 largest files in build/web:"
+          find build/web -type f -print0 | xargs -0 du -h | sort -hr | head -n 20
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

@@ -459,9 +459,26 @@ class UploadPageState extends State<UploadPage> {
           alignment: Alignment.center,
           children: [
             Image.asset(
-              "assets/images/sample_report.jpg",
+              "assets/images/sample_report_thumb.webp",
               fit: BoxFit.contain,
               width: double.infinity,
+              filterQuality: FilterQuality.low,
+            ),
+            Image.asset(
+              "assets/images/sample_report.webp",
+              fit: BoxFit.contain,
+              width: double.infinity,
+              filterQuality: FilterQuality.medium,
+              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                if (wasSynchronouslyLoaded || frame != null) {
+                  return AnimatedOpacity(
+                    opacity: 1,
+                    duration: const Duration(milliseconds: 220),
+                    child: child,
+                  );
+                }
+                return const SizedBox.shrink();
+              },
             ),
             Positioned(
               top: 10,

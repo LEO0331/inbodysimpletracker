@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../logic/providers/mqtt_provider.dart';
 import '../../logic/providers/auth_provider.dart';
 import 'signup_page.dart';
 
@@ -26,12 +25,8 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
-    final mqtt = Provider.of<MqttProvider>(context, listen: false);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Login"),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text("Login"), elevation: 0),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -50,8 +45,8 @@ class _LoginPageState extends State<LoginPage> {
                 Text(
                   'Welcome Back',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
@@ -112,8 +107,10 @@ class _LoginPageState extends State<LoginPage> {
                                 _passwordController.text.trim(),
                               );
                               if (mounted && auth.isAuthenticated) {
-                                Navigator.of(context)
-                                    .pushNamedAndRemoveUntil('/', (route) => false);
+                                Navigator.of(context).pushNamedAndRemoveUntil(
+                                  '/',
+                                  (route) => false,
+                                );
                               }
                             }
                           },
@@ -130,14 +127,12 @@ class _LoginPageState extends State<LoginPage> {
                             width: 24,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
-                        : const Text(
-                            "Login",
-                            style: TextStyle(fontSize: 16),
-                          ),
+                        : const Text("Login", style: TextStyle(fontSize: 16)),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -189,10 +184,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 16),
                   Text(
                     'Logged in as: ${auth.user?.email}',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
@@ -202,10 +194,10 @@ class _LoginPageState extends State<LoginPage> {
                     child: OutlinedButton.icon(
                       onPressed: () async {
                         await auth.logout();
-                        mqtt.disconnect();
                         if (mounted) {
-                          Navigator.of(context)
-                              .pushNamedAndRemoveUntil('/', (route) => false);
+                          Navigator.of(
+                            context,
+                          ).pushNamedAndRemoveUntil('/', (route) => false);
                         }
                       },
                       icon: const Icon(Icons.logout),
