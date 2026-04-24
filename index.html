@@ -18,8 +18,10 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="InBody Tracker helps you scan InBody reports, store fitness metrics securely, and track progress over time on web and mobile.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+  <link rel="canonical" href="https://leo0331.github.io/inbodysimpletracker/">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -30,8 +32,19 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>inbodysimpletracker</title>
+  <title>InBody Tracker | Scan Reports & Track Fitness Progress</title>
   <link rel="manifest" href="manifest.json">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="InBody Tracker">
+  <meta property="og:title" content="InBody Tracker | Scan Reports & Track Fitness Progress">
+  <meta property="og:description" content="Scan InBody reports, save body composition records, and monitor your fitness journey with clear trend tracking.">
+  <meta property="og:url" content="https://leo0331.github.io/inbodysimpletracker/">
+  <meta property="og:image" content="https://leo0331.github.io/inbodysimpletracker/icons/Icon-512.png">
+  <meta property="og:image:alt" content="InBody Tracker app icon">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="InBody Tracker | Scan Reports & Track Fitness Progress">
+  <meta name="twitter:description" content="Scan InBody reports, save body composition records, and monitor fitness trends in one place.">
+  <meta name="twitter:image" content="https://leo0331.github.io/inbodysimpletracker/icons/Icon-512.png">
   <style>
     html, body {
       width: 100%;
@@ -86,6 +99,9 @@
   </style>
 </head>
 <body>
+  <noscript>
+    InBody Tracker helps you scan InBody reports, save body composition data, and track fitness progress over time.
+  </noscript>
   <div id="boot">
     <div class="boot-card">
       <h1 class="boot-title">InBody Tracker</h1>
@@ -133,6 +149,31 @@
         console.error('Tesseract OCR error:', e);
         return '';
       }
+    }
+  </script>
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "name": "InBody Tracker",
+          "url": "https://leo0331.github.io/inbodysimpletracker/",
+          "logo": "https://leo0331.github.io/inbodysimpletracker/icons/Icon-512.png"
+        },
+        {
+          "@type": "WebSite",
+          "name": "InBody Tracker",
+          "url": "https://leo0331.github.io/inbodysimpletracker/",
+          "description": "Scan InBody reports, save body composition metrics, and track fitness progress."
+        },
+        {
+          "@type": "WebPage",
+          "name": "InBody Tracker",
+          "url": "https://leo0331.github.io/inbodysimpletracker/",
+          "description": "InBody Tracker helps users scan InBody reports and monitor body composition trends."
+        }
+      ]
     }
   </script>
   <script src="flutter_bootstrap.js" async></script>
