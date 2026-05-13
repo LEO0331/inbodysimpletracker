@@ -18,5 +18,5 @@ exports.setUserRoleOnSignup = functions.auth.user().onCreate(async (user) => {
   // Optionally, also set a custom claim for security rules
   await admin.auth().setCustomUserClaims(userId, {role: "user"});
 
-  console.log(`User ${email} created with role=user`);
+  functions.logger.info(`User ${userId} created with role=user`);
 });

@@ -1,3 +1,5 @@
+// ignore_for_file: subtype_of_sealed_class
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -9,9 +11,15 @@ import 'package:inbodysimpletracker/logic/providers/auth_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 
 class MockAuthProvider extends Mock implements AuthProvider {}
+
 class MockFirebaseFirestore extends Mock implements FirebaseFirestore {}
-class MockCollectionReference extends Mock implements CollectionReference<Map<String, dynamic>> {}
-class MockDocumentReference extends Mock implements DocumentReference<Map<String, dynamic>> {}
+
+class MockCollectionReference extends Mock
+    implements CollectionReference<Map<String, dynamic>> {}
+
+class MockDocumentReference extends Mock
+    implements DocumentReference<Map<String, dynamic>> {}
+
 class MockUser extends Mock implements User {}
 
 void main() {
@@ -24,7 +32,7 @@ void main() {
     mockAuth = MockAuthProvider();
     mockFirestore = MockFirebaseFirestore();
     mockUser = MockUser();
-    
+
     sampleReport = InbodyReport(
       id: 'report_id_123',
       reportDate: DateTime(2023, 10, 27),
@@ -55,17 +63,17 @@ void main() {
 
   group('ReportCard Widget Tests', () {
     testWidgets('Should render report summary data', (tester) async {
-       await tester.pumpWidget(createWidgetToTest());
-       expect(find.text('Oct 27, 2023'), findsOneWidget);
-       expect(find.text('Weight: 80.5 kg'), findsOneWidget);
+      await tester.pumpWidget(createWidgetToTest());
+      expect(find.text('Oct 27, 2023'), findsOneWidget);
+      expect(find.text('Weight: 80.5 kg'), findsOneWidget);
     });
 
     testWidgets('Should expand and show details', (tester) async {
-       await tester.pumpWidget(createWidgetToTest());
-       await tester.tap(find.byType(ExpansionTile));
-       await tester.pumpAndSettle();
-       expect(find.text('20.1%'), findsOneWidget);
-       expect(find.text('Delete Report'), findsOneWidget);
+      await tester.pumpWidget(createWidgetToTest());
+      await tester.tap(find.byType(ExpansionTile));
+      await tester.pumpAndSettle();
+      expect(find.text('20.1%'), findsOneWidget);
+      expect(find.text('Delete Report'), findsOneWidget);
     });
 
     testWidgets('Should handle deletion error', (tester) async {
@@ -77,8 +85,10 @@ void main() {
       when(() => mockFirestore.collection("users")).thenReturn(mockCollection);
       when(() => mockCollection.doc("user_uid_123")).thenReturn(mockDoc);
       when(() => mockDoc.collection("reports")).thenReturn(mockSubCollection);
-      when(() => mockSubCollection.doc("report_id_123")).thenReturn(mockReportDoc);
-      
+      when(
+        () => mockSubCollection.doc("report_id_123"),
+      ).thenReturn(mockReportDoc);
+
       when(() => mockReportDoc.delete()).thenThrow(Exception("Firebase Error"));
 
       await tester.pumpWidget(createWidgetToTest());

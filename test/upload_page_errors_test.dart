@@ -1,3 +1,5 @@
+// ignore_for_file: subtype_of_sealed_class
+
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,11 +13,19 @@ import 'package:inbodysimpletracker/core/services/file_service.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 
 class MockAuthProvider extends Mock implements AuthProvider {}
+
 class MockMqttProvider extends Mock implements MqttProvider {}
+
 class MockFileService extends Mock implements FileService {}
+
 class MockFirebaseFirestore extends Mock implements FirebaseFirestore {}
-class MockCollectionReference extends Mock implements CollectionReference<Map<String, dynamic>> {}
-class MockDocumentReference extends Mock implements DocumentReference<Map<String, dynamic>> {}
+
+class MockCollectionReference extends Mock
+    implements CollectionReference<Map<String, dynamic>> {}
+
+class MockDocumentReference extends Mock
+    implements DocumentReference<Map<String, dynamic>> {}
+
 class MockUser extends Mock implements User {}
 
 void main() {
@@ -45,10 +55,14 @@ void main() {
 
     final mockUsersCollection = MockCollectionReference();
     final mockUserDoc = MockDocumentReference();
-    when(() => mockFirestore.collection('users')).thenReturn(mockUsersCollection);
+    when(
+      () => mockFirestore.collection('users'),
+    ).thenReturn(mockUsersCollection);
     when(() => mockUsersCollection.doc('uid_123')).thenReturn(mockUserDoc);
-    when(() => mockUserDoc.collection('reports')).thenReturn(mockReportsCollection);
-    
+    when(
+      () => mockUserDoc.collection('reports'),
+    ).thenReturn(mockReportsCollection);
+
     when(() => mockFileService.dispose()).thenAnswer((_) {});
   });
 
@@ -59,45 +73,54 @@ void main() {
           ChangeNotifierProvider<AuthProvider>.value(value: mockAuth),
           ChangeNotifierProvider<MqttProvider>.value(value: mockMqtt),
         ],
-        child: UploadPage(firestore: mockFirestore, fileService: mockFileService),
+        child: UploadPage(
+          firestore: mockFirestore,
+          fileService: mockFileService,
+        ),
       ),
     );
   }
 
   group('UploadPage Error Handlers Hit Test', () {
     testWidgets('Should hit Firestore failure path', (tester) async {
-       tester.view.physicalSize = const Size(1200, 1600);
-       addTearDown(() => tester.view.resetPhysicalSize());
+      tester.view.physicalSize = const Size(1200, 1600);
+      addTearDown(() => tester.view.resetPhysicalSize());
 
-       when(() => mockFileService.recognizeImage(any(), any())).thenAnswer((_) async => 'Weight 70.0kg');
-       when(() => mockReportsCollection.add(any())).thenThrow(Exception("DB Fail"));
+      when(
+        () => mockFileService.recognizeImage(any(), any()),
+      ).thenAnswer((_) async => 'Weight 70.0kg');
+      when(
+        () => mockReportsCollection.add(any()),
+      ).thenThrow(Exception("DB Fail"));
 
-       await tester.pumpWidget(createWidgetToTest());
-       final state = tester.state<UploadPageState>(find.byType(UploadPage));
-       
-       try {
-         await state.processImageBytes(Uint8List(1), 'test.png');
-       } catch (e) {
-         // Silently catch to avoid test failure but ensure line is hit
-       }
-       await tester.pumpAndSettle();
+      await tester.pumpWidget(createWidgetToTest());
+      final state = tester.state<UploadPageState>(find.byType(UploadPage));
+
+      try {
+        await state.processImageBytes(Uint8List(1), 'test.png');
+      } catch (e) {
+        // Silently catch to avoid test failure but ensure line is hit
+      }
+      await tester.pumpAndSettle();
     });
 
     testWidgets('Should hit OCR failure path', (tester) async {
-       tester.view.physicalSize = const Size(1200, 1600);
-       addTearDown(() => tester.view.resetPhysicalSize());
+      tester.view.physicalSize = const Size(1200, 1600);
+      addTearDown(() => tester.view.resetPhysicalSize());
 
-       when(() => mockFileService.recognizeImage(any(), any())).thenThrow(Exception("OCR Fail"));
+      when(
+        () => mockFileService.recognizeImage(any(), any()),
+      ).thenThrow(Exception("OCR Fail"));
 
-       await tester.pumpWidget(createWidgetToTest());
-       final state = tester.state<UploadPageState>(find.byType(UploadPage));
-       
-       try {
-         await state.processImageBytes(Uint8List(1), 'test.png');
-       } catch (e) {
-         // Silently catch to avoid test failure
-       }
-       await tester.pumpAndSettle();
+      await tester.pumpWidget(createWidgetToTest());
+      final state = tester.state<UploadPageState>(find.byType(UploadPage));
+
+      try {
+        await state.processImageBytes(Uint8List(1), 'test.png');
+      } catch (e) {
+        // Silently catch to avoid test failure
+      }
+      await tester.pumpAndSettle();
     });
   });
 }

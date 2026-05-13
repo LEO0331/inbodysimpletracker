@@ -7,14 +7,14 @@ class AuthService {
   final FirebaseFirestore _db;
 
   AuthService({FirebaseAuth? auth, FirebaseFirestore? db})
-      : _auth = auth ?? FirebaseAuth.instance,
-        _db = db ?? FirebaseFirestore.instance;
+    : _auth = auth ?? FirebaseAuth.instance,
+      _db = db ?? FirebaseFirestore.instance;
 
   // 註冊邏輯
   Future<User?> signUp(String email, String password) async {
     try {
       final credential = await _auth.createUserWithEmailAndPassword(
-        email: email, 
+        email: email,
         password: password,
       );
 
@@ -22,11 +22,11 @@ class AuthService {
 
       await _db.collection("users").doc(uid).set({
         "email": email,
-        "role": "user", 
+        "role": "user",
         "createdAt": FieldValue.serverTimestamp(),
       });
 
-      developer.log("User signed up successfully: $email", name: "auth.service");
+      developer.log("User signed up successfully: $uid", name: "auth.service");
       return credential.user;
     } on FirebaseAuthException catch (e) {
       developer.log("Auth Error: ${e.message}", name: "auth.service", error: e);
@@ -41,10 +41,13 @@ class AuthService {
   Future<User?> signIn(String email, String password) async {
     try {
       final credential = await _auth.signInWithEmailAndPassword(
-        email: email, 
+        email: email,
         password: password,
       );
-      developer.log("User signed in: $email", name: "auth.service");
+      developer.log(
+        "User signed in successfully: ${credential.user?.uid ?? "unknown"}",
+        name: "auth.service",
+      );
       return credential.user;
     } catch (e) {
       developer.log("SignIn Error: $e", name: "auth.service", error: e);
@@ -60,7 +63,7 @@ class AuthService {
 
       final doc = await _db.collection("users").doc(user.uid).get();
       final String? role = doc.data()?['role'] as String?;
-      
+
       return role == "admin";
     } catch (e) {
       developer.log("isAdmin Check Error: $e", name: "auth.service", error: e);

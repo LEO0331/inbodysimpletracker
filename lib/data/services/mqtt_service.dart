@@ -1,12 +1,19 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 
 class MqttService {
   late MqttServerClient client;
+  StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>? _subscription;
 
   Future<void> connect() async {
     // 這裡使用公共測試 Broker: broker.emqx.io
-    client = MqttServerClient('broker.emqx.io', 'flutter_client_${DateTime.now().ms}');
+    client = MqttServerClient(
+      'broker.emqx.io',
+      'flutter_client_${DateTime.now().millisecondsSinceEpoch}',
+    );
     client.port = 1883;
     client.keepAlivePeriod = 20;
 
@@ -18,9 +25,9 @@ class MqttService {
 
     try {
       await client.connect();
-      print('MQTT 連線成功');
+      developer.log('MQTT connected', name: 'mqtt.service');
     } catch (e) {
-      print('連線失敗: $e');
+      developer.log('MQTT connection failed', name: 'mqtt.service', error: e);
       client.disconnect();
     }
 
@@ -28,10 +35,18 @@ class MqttService {
     client.subscribe("inbody/data", MqttQos.atLeastOnce);
 
     // 監聽訊息
-    client.updates!.listen((List<MqttReceivedMessage<MqttMessage>> c) {
+    _subscription?.cancel();
+    _subscription = client.updates!.listen((
+      List<MqttReceivedMessage<MqttMessage>> c,
+    ) {
       final MqttPublishMessage recMess = c[0].payload as MqttPublishMessage;
-      final String pt = MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
-      print('收到訊息: 主題: ${c[0].topic}, 內容: $pt');
+      final String pt = MqttPublishPayload.bytesToStringAsString(
+        recMess.payload.message,
+      );
+      developer.log(
+        'MQTT message received on ${c[0].topic}: $pt',
+        name: 'mqtt.service',
+      );
     });
   }
 
@@ -39,5 +54,10 @@ class MqttService {
     final builder = MqttClientPayloadBuilder();
     builder.addString(message);
     client.publishMessage(topic, MqttQos.exactlyOnce, builder.payload!);
+  }
+
+  void disconnect() {
+    _subscription?.cancel();
+    client.disconnect();
   }
 }

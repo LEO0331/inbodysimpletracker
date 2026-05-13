@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ class AuthProvider with ChangeNotifier {
   bool _isLoading = true;
   String? _errorMessage;
   bool _isAuthenticated = false;
+  StreamSubscription<User?>? _authSubscription;
 
   // Getters
   User? get user => _user;
@@ -19,25 +21,23 @@ class AuthProvider with ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _isAuthenticated;
 
-  AuthProvider({AuthService? authService}) 
+  AuthProvider({AuthService? authService})
     : _authService = authService ?? AuthService() {
     final currentUser = _authService.currentUser;
     _user = currentUser;
     _isAuthenticated = currentUser != null;
-    // Monitor auth state changes
-    _authService.userChanges.listen((u) async {
+    _authSubscription = _authService.userChanges.listen((u) async {
       _user = u;
       _isAuthenticated = u != null;
 
       if (u != null) {
-        // User logged in - check if admin
         try {
           _isAdmin = await _authService.isAdmin();
           developer.log(
-            "User logged in: ${u.email}, isAdmin: $_isAdmin",
+            "User logged in: ${u.uid}, isAdmin: $_isAdmin",
             name: "auth.provider",
           );
-          _errorMessage = null; // Clear error on successful login
+          _errorMessage = null;
         } catch (e) {
           developer.log(
             "Error checking admin status",
@@ -47,7 +47,6 @@ class AuthProvider with ChangeNotifier {
           _errorMessage = "Error loading user data";
         }
       } else {
-        // User logged out - reset state
         _isAdmin = false;
         _errorMessage = null;
         developer.log("User logged out", name: "auth.provider");
@@ -73,11 +72,7 @@ class AuthProvider with ChangeNotifier {
       // Note: userChanges stream will handle state updates
     } on FirebaseAuthException catch (e) {
       _errorMessage = _getFirebaseErrorMessage(e);
-      developer.log(
-        "Login failed: ${e.code}",
-        name: "auth.provider",
-        error: e,
-      );
+      developer.log("Login failed: ${e.code}", name: "auth.provider", error: e);
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -85,11 +80,7 @@ class AuthProvider with ChangeNotifier {
       if (_errorMessage == null || _errorMessage!.isEmpty) {
         _errorMessage = "Login failed. Please try again.";
       }
-      developer.log(
-        "Login error",
-        name: "auth.provider",
-        error: e,
-      );
+      developer.log("Login error", name: "auth.provider", error: e);
       _isLoading = false;
       notifyListeners();
     }
@@ -130,11 +121,7 @@ class AuthProvider with ChangeNotifier {
       if (_errorMessage == null || _errorMessage!.isEmpty) {
         _errorMessage = "Signup failed. Please try again.";
       }
-      developer.log(
-        "Signup error",
-        name: "auth.provider",
-        error: e,
-      );
+      developer.log("Signup error", name: "auth.provider", error: e);
       _isLoading = false;
       notifyListeners();
     }
@@ -153,11 +140,7 @@ class AuthProvider with ChangeNotifier {
       if (_errorMessage == null || _errorMessage!.isEmpty) {
         _errorMessage = "Logout failed";
       }
-      developer.log(
-        "Logout error",
-        name: "auth.provider",
-        error: e,
-      );
+      developer.log("Logout error", name: "auth.provider", error: e);
       _isLoading = false;
       notifyListeners();
     }
@@ -193,5 +176,11 @@ class AuthProvider with ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 }

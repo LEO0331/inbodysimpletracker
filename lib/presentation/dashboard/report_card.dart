@@ -30,7 +30,9 @@ class ReportCard extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Delete Report"),
-        content: const Text("Are you sure you want to delete this report? This action cannot be undone."),
+        content: const Text(
+          "Are you sure you want to delete this report? This action cannot be undone.",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -80,16 +82,15 @@ class ReportCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 🛡️ 安全檢查：確保日期不為 null (雖然 Model 已處理，但多一層保護)
-    final String formattedDate = report.reportDate != null 
-        ? DateFormat('MMM dd, yyyy').format(report.reportDate)
-        : "Unknown Date";
+    final String formattedDate = DateFormat(
+      'MMM dd, yyyy',
+    ).format(report.reportDate);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       clipBehavior: Clip.antiAlias, // 讓邊角更圓滑
       child: ExpansionTile(
-        backgroundColor: Colors.blue[50]?.withOpacity(0.3),
+        backgroundColor: Colors.blue[50]?.withValues(alpha: 0.3),
         leading: CircleAvatar(
           backgroundColor: Colors.blue[100],
           child: Text(
@@ -105,7 +106,7 @@ class ReportCard extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(
-          'Weight: ${report.weight?.toStringAsFixed(1) ?? "0.0"} kg',
+          'Weight: ${report.weight.toStringAsFixed(1)} kg',
           style: TextStyle(color: Colors.grey[600], fontSize: 12),
         ),
         children: [
@@ -114,17 +115,36 @@ class ReportCard extends StatelessWidget {
             child: Column(
               children: [
                 const Divider(),
-                _buildMetricRow('Weight', '${report.weight ?? 0} kg', Icons.monitor_weight),
-                _buildMetricRow('Body Fat %', '${report.bodyFatPercent ?? 0}%', Icons.pie_chart),
-                _buildMetricRow('Muscle Mass', '${report.muscleMass ?? 0} kg', Icons.fitness_center),
-                _buildMetricRow('Visceral Fat', '${report.visceralFat ?? 0}', Icons.opacity),
+                _buildMetricRow(
+                  'Weight',
+                  '${report.weight} kg',
+                  Icons.monitor_weight,
+                ),
+                _buildMetricRow(
+                  'Body Fat %',
+                  '${report.bodyFatPercent}%',
+                  Icons.pie_chart,
+                ),
+                _buildMetricRow(
+                  'Muscle Mass',
+                  '${report.muscleMass} kg',
+                  Icons.fitness_center,
+                ),
+                _buildMetricRow(
+                  'Visceral Fat',
+                  '${report.visceralFat}',
+                  Icons.opacity,
+                ),
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: () => _showDeleteDialog(context),
                     icon: const Icon(Icons.delete, color: Colors.red, size: 18),
-                    label: const Text('Delete Report', style: TextStyle(color: Colors.red)),
+                    label: const Text(
+                      'Delete Report',
+                      style: TextStyle(color: Colors.red),
+                    ),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.red),
                     ),
@@ -139,9 +159,6 @@ class ReportCard extends StatelessWidget {
   }
 
   Widget _buildMetricRow(String label, String value, IconData icon) {
-    // 🛡️ 確保 value 絕對不是 null，避免 Text 崩潰
-    final safeValue = value ?? "N/A";
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -150,7 +167,7 @@ class ReportCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(child: Text(label)),
           Text(
-            safeValue,
+            value,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
         ],

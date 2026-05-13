@@ -1,3 +1,5 @@
+// ignore_for_file: subtype_of_sealed_class
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,10 +7,18 @@ import 'package:inbodysimpletracker/data/services/firestore_service.dart';
 import 'package:inbodysimpletracker/data/models/inbody_report.dart';
 
 class MockFirebaseFirestore extends Mock implements FirebaseFirestore {}
-class MockCollectionReference extends Mock implements CollectionReference<Map<String, dynamic>> {}
-class MockDocumentReference extends Mock implements DocumentReference<Map<String, dynamic>> {}
-class MockQuerySnapshot extends Mock implements QuerySnapshot<Map<String, dynamic>> {}
-class MockQueryDocumentSnapshot extends Mock implements QueryDocumentSnapshot<Map<String, dynamic>> {}
+
+class MockCollectionReference extends Mock
+    implements CollectionReference<Map<String, dynamic>> {}
+
+class MockDocumentReference extends Mock
+    implements DocumentReference<Map<String, dynamic>> {}
+
+class MockQuerySnapshot extends Mock
+    implements QuerySnapshot<Map<String, dynamic>> {}
+
+class MockQueryDocumentSnapshot extends Mock
+    implements QueryDocumentSnapshot<Map<String, dynamic>> {}
 
 void main() {
   late MockFirebaseFirestore mockFirestore;
@@ -33,10 +43,16 @@ void main() {
         visceralFat: 5,
       );
 
-      when(() => mockFirestore.collection("users")).thenReturn(mockUsersCollection);
+      when(
+        () => mockFirestore.collection("users"),
+      ).thenReturn(mockUsersCollection);
       when(() => mockUsersCollection.doc("uid_123")).thenReturn(mockUserDoc);
-      when(() => mockUserDoc.collection("reports")).thenReturn(mockReportsCollection);
-      when(() => mockReportsCollection.add(any())).thenAnswer((_) async => MockDocumentReference());
+      when(
+        () => mockUserDoc.collection("reports"),
+      ).thenReturn(mockReportsCollection);
+      when(
+        () => mockReportsCollection.add(any()),
+      ).thenAnswer((_) async => MockDocumentReference());
 
       await firestoreService.addReport("uid_123", report);
 
@@ -47,7 +63,8 @@ void main() {
       final mockUsersCollection = MockCollectionReference();
       final mockUserDoc = MockDocumentReference();
       final mockReportsCollection = MockCollectionReference();
-      final mockQuery = MockCollectionReference(); // Mocking ordered query as collection ref for simplicity
+      final mockQuery =
+          MockCollectionReference(); // Mocking ordered query as collection ref for simplicity
       final mockSnapshot = MockQuerySnapshot();
       final mockDocSnapshot = MockQueryDocumentSnapshot();
 
@@ -59,11 +76,19 @@ void main() {
         'visceralFat': 5.0,
       };
 
-      when(() => mockFirestore.collection("users")).thenReturn(mockUsersCollection);
+      when(
+        () => mockFirestore.collection("users"),
+      ).thenReturn(mockUsersCollection);
       when(() => mockUsersCollection.doc("uid_123")).thenReturn(mockUserDoc);
-      when(() => mockUserDoc.collection("reports")).thenReturn(mockReportsCollection);
-      when(() => mockReportsCollection.orderBy("reportDate", descending: true)).thenReturn(mockQuery);
-      when(() => mockQuery.snapshots()).thenAnswer((_) => Stream.value(mockSnapshot));
+      when(
+        () => mockUserDoc.collection("reports"),
+      ).thenReturn(mockReportsCollection);
+      when(
+        () => mockReportsCollection.orderBy("reportDate", descending: true),
+      ).thenReturn(mockQuery);
+      when(
+        () => mockQuery.snapshots(),
+      ).thenAnswer((_) => Stream.value(mockSnapshot));
       when(() => mockSnapshot.docs).thenReturn([mockDocSnapshot]);
       when(() => mockDocSnapshot.id).thenReturn('doc_id_123');
       when(() => mockDocSnapshot.data()).thenReturn(reportData);

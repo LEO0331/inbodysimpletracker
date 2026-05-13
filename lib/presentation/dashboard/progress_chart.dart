@@ -22,13 +22,19 @@ class InbodyChart extends StatelessWidget {
 
     // 1. 準備數據點
     final List<LineChartBarData> lines = [];
-    
+
     if (metric == "all" || isFullAnalysis) {
       lines.add(_buildLineData(_getSpots("weight"), Colors.blue));
       lines.add(_buildLineData(_getSpots("bodyFatPercent"), Colors.orange));
       lines.add(_buildLineData(_getSpots("muscleMass"), Colors.green));
     } else {
-      lines.add(_buildLineData(_getSpots(metric), _getMetricColor(metric), showArea: true));
+      lines.add(
+        _buildLineData(
+          _getSpots(metric),
+          _getMetricColor(metric),
+          showArea: true,
+        ),
+      );
     }
 
     // 2. 計算 Y 軸範圍
@@ -53,7 +59,7 @@ class InbodyChart extends StatelessWidget {
     return Column(
       children: [
         if (isFullAnalysis) _buildLegend(),
-        
+
         Expanded(
           child: LineChart(
             LineChartData(
@@ -73,7 +79,7 @@ class InbodyChart extends StatelessWidget {
                   if (metric == "weight" && targetWeight != null)
                     HorizontalLine(
                       y: targetWeight!,
-                      color: Colors.red.withOpacity(0.7),
+                      color: Colors.red.withValues(alpha: 0.7),
                       strokeWidth: 2,
                       dashArray: [5, 5], // 虛線設定
                       label: HorizontalLineLabel(
@@ -104,15 +110,24 @@ class InbodyChart extends StatelessWidget {
     return List.generate(reports.length, (i) {
       final r = reports[i];
       double val = 0;
-      if (m == "weight") val = r.weight;
-      else if (m == "bodyFatPercent") val = r.bodyFatPercent;
-      else if (m == "muscleMass") val = r.muscleMass;
-      else if (m == "visceralFat") val = r.visceralFat;
+      if (m == "weight") {
+        val = r.weight;
+      } else if (m == "bodyFatPercent") {
+        val = r.bodyFatPercent;
+      } else if (m == "muscleMass") {
+        val = r.muscleMass;
+      } else if (m == "visceralFat") {
+        val = r.visceralFat;
+      }
       return FlSpot(i.toDouble(), val);
     });
   }
 
-  LineChartBarData _buildLineData(List<FlSpot> spots, Color color, {bool showArea = false}) {
+  LineChartBarData _buildLineData(
+    List<FlSpot> spots,
+    Color color, {
+    bool showArea = false,
+  }) {
     return LineChartBarData(
       spots: spots,
       isCurved: true,
@@ -121,7 +136,7 @@ class InbodyChart extends StatelessWidget {
       dotData: const FlDotData(show: true),
       belowBarData: BarAreaData(
         show: showArea,
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
       ),
     );
   }
@@ -129,7 +144,7 @@ class InbodyChart extends StatelessWidget {
   LineTouchData _buildTouchData() {
     return LineTouchData(
       touchTooltipData: LineTouchTooltipData(
-        getTooltipColor: (spot) => Colors.blueGrey.withOpacity(0.9),
+        getTooltipColor: (spot) => Colors.blueGrey.withValues(alpha: 0.9),
         getTooltipItems: (touchedSpots) {
           return touchedSpots.map((barSpot) {
             final titles = ["Weight", "Fat %", "Muscle"];
@@ -155,10 +170,17 @@ class InbodyChart extends StatelessWidget {
           reservedSize: 30,
           getTitlesWidget: (value, meta) {
             final index = value.toInt();
-            if (index >= 0 && index < reports.length && value == index.toDouble()) {
-              if (reports.length > 6 && index % (reports.length ~/ 3) != 0) return const SizedBox();
+            if (index >= 0 &&
+                index < reports.length &&
+                value == index.toDouble()) {
+              if (reports.length > 6 && index % (reports.length ~/ 3) != 0) {
+                return const SizedBox();
+              }
               final date = reports[index].reportDate;
-              return Text("${date.month}/${date.day}", style: const TextStyle(fontSize: 10, color: Colors.grey));
+              return Text(
+                "${date.month}/${date.day}",
+                style: const TextStyle(fontSize: 10, color: Colors.grey),
+              );
             }
             return const SizedBox();
           },
@@ -185,9 +207,16 @@ class InbodyChart extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+        ),
       ],
     );
   }

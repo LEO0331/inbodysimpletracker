@@ -1,3 +1,5 @@
+// ignore_for_file: subtype_of_sealed_class
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,12 +7,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:inbodysimpletracker/data/services/auth_service.dart';
 
 class MockFirebaseAuth extends Mock implements FirebaseAuth {}
+
 class MockUserCredential extends Mock implements UserCredential {}
+
 class MockUser extends Mock implements User {}
+
 class MockFirebaseFirestore extends Mock implements FirebaseFirestore {}
-class MockCollectionReference extends Mock implements CollectionReference<Map<String, dynamic>> {}
-class MockDocumentReference extends Mock implements DocumentReference<Map<String, dynamic>> {}
-class MockDocumentSnapshot extends Mock implements DocumentSnapshot<Map<String, dynamic>> {}
+
+class MockCollectionReference extends Mock
+    implements CollectionReference<Map<String, dynamic>> {}
+
+class MockDocumentReference extends Mock
+    implements DocumentReference<Map<String, dynamic>> {}
+
+class MockDocumentSnapshot extends Mock
+    implements DocumentSnapshot<Map<String, dynamic>> {}
 
 void main() {
   late MockFirebaseAuth mockAuth;
@@ -31,10 +42,12 @@ void main() {
       final mockCollection = MockCollectionReference();
       final mockDoc = MockDocumentReference();
 
-      when(() => mockAuth.createUserWithEmailAndPassword(
-            email: 'test@example.com',
-            password: 'password123',
-          )).thenAnswer((_) async => mockCredential);
+      when(
+        () => mockAuth.createUserWithEmailAndPassword(
+          email: 'test@example.com',
+          password: 'password123',
+        ),
+      ).thenAnswer((_) async => mockCredential);
       when(() => mockCredential.user).thenReturn(mockUser);
       when(() => mockUser.uid).thenReturn('uid_123');
 
@@ -48,18 +61,27 @@ void main() {
       verify(() => mockDoc.set(any())).called(1);
     });
 
-    test('signIn should call FirebaseAuth signInWithEmailAndPassword', () async {
-      final mockCredential = MockUserCredential();
-      when(() => mockAuth.signInWithEmailAndPassword(
+    test(
+      'signIn should call FirebaseAuth signInWithEmailAndPassword',
+      () async {
+        final mockCredential = MockUserCredential();
+        when(
+          () => mockAuth.signInWithEmailAndPassword(
             email: 'test@example.com',
             password: 'password123',
-          )).thenAnswer((_) async => mockCredential);
-      when(() => mockCredential.user).thenReturn(mockUser);
+          ),
+        ).thenAnswer((_) async => mockCredential);
+        when(() => mockCredential.user).thenReturn(mockUser);
+        when(() => mockUser.uid).thenReturn('uid_123');
 
-      final user = await authService.signIn('test@example.com', 'password123');
+        final user = await authService.signIn(
+          'test@example.com',
+          'password123',
+        );
 
-      expect(user, mockUser);
-    });
+        expect(user, mockUser);
+      },
+    );
 
     test('isAdmin should return true for admin role', () async {
       final mockCollection = MockCollectionReference();

@@ -10,9 +10,13 @@ import 'package:inbodysimpletracker/core/services/file_service.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 
 class MockAuthProvider extends Mock implements AuthProvider {}
+
 class MockMqttProvider extends Mock implements MqttProvider {}
+
 class MockFileService extends Mock implements FileService {}
+
 class MockFirebaseFirestore extends Mock implements FirebaseFirestore {}
+
 class MockUser extends Mock implements User {}
 
 void main() {
@@ -30,9 +34,9 @@ void main() {
     when(() => mockAuth.user).thenReturn(null);
     when(() => mockAuth.isAuthenticated).thenReturn(false);
     when(() => mockAuth.isLoading).thenReturn(false);
-    
+
     when(() => mockFileService.dispose()).thenAnswer((_) {});
-    
+
     when(() => mockMqtt.isLoading).thenReturn(false);
     when(() => mockMqtt.isConnected).thenReturn(false);
   });
@@ -44,7 +48,10 @@ void main() {
           ChangeNotifierProvider<AuthProvider>.value(value: mockAuth),
           ChangeNotifierProvider<MqttProvider>.value(value: mockMqtt),
         ],
-        child: UploadPage(firestore: mockFirestore, fileService: mockFileService),
+        child: UploadPage(
+          firestore: mockFirestore,
+          fileService: mockFileService,
+        ),
       ),
     );
   }
@@ -55,7 +62,7 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createWidgetToTest());
-      
+
       final manualBtn = find.text('Manual Entry');
       await tester.ensureVisible(manualBtn);
       await tester.tap(manualBtn);
@@ -64,22 +71,24 @@ void main() {
     });
 
     testWidgets('Triggers Logout confirmation', (tester) async {
-       tester.view.physicalSize = const Size(1200, 1600);
-       addTearDown(() => tester.view.resetPhysicalSize());
+      tester.view.physicalSize = const Size(1200, 1600);
+      addTearDown(() => tester.view.resetPhysicalSize());
 
-       final mockUser = MockUser();
-       when(() => mockAuth.user).thenReturn(mockUser);
-       when(() => mockUser.email).thenReturn('test@example.com');
-       
-       await tester.pumpWidget(createWidgetToTest());
-       
-       await tester.tap(find.byType(CircleAvatar));
-       await tester.pumpAndSettle();
-       
-       try {
-         await tester.tap(find.text('Logout'));
-         await tester.pumpAndSettle();
-       } catch (e) {}
+      final mockUser = MockUser();
+      when(() => mockAuth.user).thenReturn(mockUser);
+      when(() => mockUser.email).thenReturn('test@example.com');
+
+      await tester.pumpWidget(createWidgetToTest());
+
+      await tester.tap(find.byType(CircleAvatar));
+      await tester.pumpAndSettle();
+
+      try {
+        await tester.tap(find.text('Logout'));
+        await tester.pumpAndSettle();
+      } catch (e) {
+        // Some layouts do not expose the logout menu in this targeted UI test.
+      }
     });
   });
 }

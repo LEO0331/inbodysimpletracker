@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -8,7 +7,7 @@ class FileService {
   final TextRecognizer _textRecognizer;
 
   FileService({TextRecognizer? textRecognizer})
-      : _textRecognizer = textRecognizer ?? TextRecognizer();
+    : _textRecognizer = textRecognizer ?? TextRecognizer();
 
   Future<String> recognizeImage(Uint8List bytes, String? filePath) async {
     if (kIsWeb) {
@@ -16,7 +15,9 @@ class FileService {
     } else {
       if (filePath != null) {
         final inputImage = InputImage.fromFilePath(filePath);
-        final RecognizedText result = await _textRecognizer.processImage(inputImage);
+        final RecognizedText result = await _textRecognizer.processImage(
+          inputImage,
+        );
         return result.text;
       }
       return "Error: Missing file path on mobile.";

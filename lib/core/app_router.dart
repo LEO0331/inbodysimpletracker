@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../logic/providers/mqtt_provider.dart';
 import '../presentation/auth/login_page.dart';
 import '../presentation/auth/signup_page.dart';
 import '../presentation/dashboard/dashboard_page.dart';
@@ -16,9 +18,19 @@ class AppRouter {
       case '/signup':
         return MaterialPageRoute(builder: (_) => const SignupPage());
       case '/upload':
-        return MaterialPageRoute(builder: (_) => const UploadPage());
+        return MaterialPageRoute(
+          builder: (_) => ChangeNotifierProvider(
+            create: (_) => MqttProvider(),
+            child: const UploadPage(),
+          ),
+        );
       case '/dashboard':
-        return MaterialPageRoute(builder: (_) => const DashboardPage());
+        return MaterialPageRoute(
+          builder: (_) => ChangeNotifierProvider(
+            create: (_) => MqttProvider(),
+            child: const DashboardPage(),
+          ),
+        );
       case '/admin':
         return MaterialPageRoute(builder: (_) => const AdminPage());
       default:

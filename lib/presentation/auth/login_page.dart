@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../logic/providers/auth_provider.dart';
-import 'signup_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -106,7 +105,7 @@ class _LoginPageState extends State<LoginPage> {
                                 _emailController.text.trim(),
                                 _passwordController.text.trim(),
                               );
-                              if (mounted && auth.isAuthenticated) {
+                              if (context.mounted && auth.isAuthenticated) {
                                 Navigator.of(context).pushNamedAndRemoveUntil(
                                   '/',
                                   (route) => false,
@@ -194,7 +193,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: OutlinedButton.icon(
                       onPressed: () async {
                         await auth.logout();
-                        if (mounted) {
+                        if (context.mounted) {
                           Navigator.of(
                             context,
                           ).pushNamedAndRemoveUntil('/', (route) => false);

@@ -54,13 +54,15 @@ class _DashboardPageState extends State<DashboardPage> {
     final mqtt = Provider.of<MqttProvider>(context);
     final user = auth.user;
 
-    if (user == null) return const Scaffold(body: Center(child: Text("Please login")));
+    if (user == null) {
+      return const Scaffold(body: Center(child: Text("Please login")));
+    }
 
     if (!mqtt.isConnected && !mqtt.isLoading) {
       // 建議在微任務中執行，避免在 build 期間呼叫 notifyListeners
       Future.microtask(() => mqtt.initMqtt(user.uid));
     }
-    
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -68,7 +70,7 @@ class _DashboardPageState extends State<DashboardPage> {
           children: [
             const Text("InBody Dashboard"),
             SelectableText(
-              "UID: ${user.uid}", 
+              "UID: ${user.uid}",
               style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
             ),
           ],
@@ -80,7 +82,10 @@ class _DashboardPageState extends State<DashboardPage> {
             children: [
               Text(
                 mqtt.isConnected ? "MQTT Live" : "Offline",
-                style: TextStyle(fontSize: 12, color: mqtt.isConnected ? Colors.green : Colors.grey),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: mqtt.isConnected ? Colors.green : Colors.grey,
+                ),
               ),
               const SizedBox(width: 8),
               Icon(
@@ -101,27 +106,39 @@ class _DashboardPageState extends State<DashboardPage> {
             .orderBy("reportDate", descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError) {
+            return Center(child: Text("Error: ${snapshot.error}"));
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
           final docs = snapshot.data?.docs ?? [];
-          
+
           // 1. 原始資料解析
           final List<InbodyReport> allReports = [];
           for (var doc in docs) {
             try {
               final data = doc.data() as Map<String, dynamic>?;
-              if (data != null) allReports.add(InbodyReport.fromMap(doc.id, data));
-            } catch (e) { developer.log("Parsing error", error: e); }
+              if (data != null) {
+                allReports.add(InbodyReport.fromMap(doc.id, data));
+              }
+            } catch (e) {
+              developer.log("Parsing error", error: e);
+            }
           }
 
           // 2. 日期過濾邏輯
           final now = DateTime.now();
           final List<InbodyReport> filteredReports = allReports.where((r) {
             if (_dateFilter == "3 Months") {
-              return r.reportDate.isAfter(now.subtract(const Duration(days: 90)));
+              return r.reportDate.isAfter(
+                now.subtract(const Duration(days: 90)),
+              );
             } else if (_dateFilter == "6 Months") {
-              return r.reportDate.isAfter(now.subtract(const Duration(days: 180)));
+              return r.reportDate.isAfter(
+                now.subtract(const Duration(days: 180)),
+              );
             }
             return true;
           }).toList();
@@ -137,13 +154,17 @@ class _DashboardPageState extends State<DashboardPage> {
               child: Column(
                 children: [
                   // ✅ 3. 新增：MQTT 即時數據展示區 (只在有新數據時顯示)
-                  if (mqtt.mqttReports.isNotEmpty) _buildMqttLiveSection(mqtt.mqttReports.first),
+                  if (mqtt.mqttReports.isNotEmpty)
+                    _buildMqttLiveSection(mqtt.mqttReports.first),
 
                   _buildTopSummary(filteredReports),
 
                   // 指標切換與日期篩選
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -164,12 +185,25 @@ class _DashboardPageState extends State<DashboardPage> {
                         const SizedBox(width: 16),
                         DropdownButton<String>(
                           value: _dateFilter,
-                          style: const TextStyle(fontSize: 14, color: Colors.blue, fontWeight: FontWeight.bold),
-                          underline: Container(height: 2, color: Colors.blueAccent),
-                          items: ["All", "3 Months", "6 Months"].map((String value) {
-                            return DropdownMenuItem<String>(value: value, child: Text(value));
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.blue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          underline: Container(
+                            height: 2,
+                            color: Colors.blueAccent,
+                          ),
+                          items: ["All", "3 Months", "6 Months"].map((
+                            String value,
+                          ) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
                           }).toList(),
-                          onChanged: (val) => setState(() => _dateFilter = val!),
+                          onChanged: (val) =>
+                              setState(() => _dateFilter = val!),
                         ),
                       ],
                     ),
@@ -216,8 +250,13 @@ class _DashboardPageState extends State<DashboardPage> {
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: [Colors.blue.shade50, Colors.white]),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -225,9 +264,18 @@ class _DashboardPageState extends State<DashboardPage> {
             children: [
               const Icon(Icons.sensors, color: Colors.blueAccent),
               const SizedBox(width: 8),
-              const Text("📡 Live MQTT Data (Recent Scan)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+              const Text(
+                "📡 Live MQTT Data (Recent Scan)",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blueAccent,
+                ),
+              ),
               const Spacer(),
-              Text(DateFormat('HH:mm:ss').format(latestReport.reportDate), style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(
+                DateFormat('HH:mm:ss').format(latestReport.reportDate),
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
             ],
           ),
           const Divider(),
@@ -248,7 +296,14 @@ class _DashboardPageState extends State<DashboardPage> {
     return Column(
       children: [
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.blue,
+          ),
+        ),
       ],
     );
   }
@@ -258,15 +313,36 @@ class _DashboardPageState extends State<DashboardPage> {
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          Expanded(child: _buildSummaryCard(title: "Shown Reports", value: reports.length.toString(), icon: Icons.list, color: Colors.blue)),
+          Expanded(
+            child: _buildSummaryCard(
+              title: "Shown Reports",
+              value: reports.length.toString(),
+              icon: Icons.list,
+              color: Colors.blue,
+            ),
+          ),
           const SizedBox(width: 12),
-          Expanded(child: _buildSummaryCard(title: "Latest Date", value: reports.isNotEmpty ? DateFormat('MM/dd').format(reports.first.reportDate) : "N/A", icon: Icons.calendar_month, color: Colors.green)),
+          Expanded(
+            child: _buildSummaryCard(
+              title: "Latest Date",
+              value: reports.isNotEmpty
+                  ? DateFormat('MM/dd').format(reports.first.reportDate)
+                  : "N/A",
+              icon: Icons.calendar_month,
+              color: Colors.green,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryCard({required String title, required String value, required IconData icon, required Color color}) {
+  Widget _buildSummaryCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
     return Card(
       elevation: 2,
       child: Padding(
@@ -275,8 +351,14 @@ class _DashboardPageState extends State<DashboardPage> {
           children: [
             Icon(icon, color: color),
             const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
       ),
@@ -288,7 +370,9 @@ class _DashboardPageState extends State<DashboardPage> {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
-      onSelected: (val) { if (val) setState(() => _selectedMetric = metric); },
+      onSelected: (val) {
+        if (val) setState(() => _selectedMetric = metric);
+      },
     );
   }
 
@@ -300,8 +384,15 @@ class _DashboardPageState extends State<DashboardPage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("History", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              TextButton.icon(onPressed: () => _showFullHistoryChart(reports), icon: const Icon(Icons.analytics), label: const Text("Full Analysis")),
+              const Text(
+                "History",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              TextButton.icon(
+                onPressed: () => _showFullHistoryChart(reports),
+                icon: const Icon(Icons.analytics),
+                label: const Text("Full Analysis"),
+              ),
             ],
           ),
         ),
@@ -311,7 +402,10 @@ class _DashboardPageState extends State<DashboardPage> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: reports.length,
-            itemBuilder: (context, index) => ReportCard(report: reports[index], index: reports.length - index),
+            itemBuilder: (context, index) => ReportCard(
+              report: reports[index],
+              index: reports.length - index,
+            ),
           ),
         ),
       ],

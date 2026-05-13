@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
@@ -12,6 +13,9 @@ import '../../data/services/firestore_service.dart';
 class MqttProvider with ChangeNotifier {
   final FirestoreService _firestoreService;
   MqttClient? _client;
+  StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>?
+  _updatesSubscription;
+  bool _isDisposed = false;
 
   MqttProvider({FirestoreService? firestoreService, MqttClient? client})
     : _firestoreService = firestoreService ?? FirestoreService(),
@@ -31,7 +35,7 @@ class MqttProvider with ChangeNotifier {
 
     _isLoading = true;
     mqttReports.clear(); // 清除舊數據
-    notifyListeners();
+    _notifyIfActive();
 
     const String broker = 'broker.emqx.io';
     final String uniqueId =
@@ -59,7 +63,7 @@ class MqttProvider with ChangeNotifier {
 
     _client!.onDisconnected = () {
       _isConnected = false;
-      notifyListeners();
+      _notifyIfActive();
       developer.log("MQTT Disconnected for user: $uid", name: "mqtt.provider");
     };
 
@@ -81,7 +85,10 @@ class MqttProvider with ChangeNotifier {
         retain: true,
       );
 
-      _client!.updates!.listen((List<MqttReceivedMessage<MqttMessage>> c) {
+      _updatesSubscription?.cancel();
+      _updatesSubscription = _client!.updates!.listen((
+        List<MqttReceivedMessage<MqttMessage>> c,
+      ) {
         final MqttPublishMessage recMess = c[0].payload as MqttPublishMessage;
         final String pt = MqttPublishPayload.bytesToStringAsString(
           recMess.payload.message,
@@ -95,7 +102,7 @@ class MqttProvider with ChangeNotifier {
       _isConnected = false;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -109,7 +116,7 @@ class MqttProvider with ChangeNotifier {
       );
 
       mqttReports.insert(0, newReport);
-      notifyListeners();
+      _notifyIfActive();
 
       // ✅ 自動儲存到 Firestore
       await _firestoreService.addReport(uid, newReport);
@@ -120,13 +127,23 @@ class MqttProvider with ChangeNotifier {
   }
 
   void disconnect() {
+    _updatesSubscription?.cancel();
+    _updatesSubscription = null;
     _client?.disconnect();
     _isConnected = false;
-    notifyListeners();
+    _notifyIfActive();
+  }
+
+  void _notifyIfActive() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
+    _updatesSubscription?.cancel();
     _client?.disconnect();
     super.dispose();
   }

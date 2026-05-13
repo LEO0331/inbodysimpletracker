@@ -1,19 +1,14 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:developer' as developer;
 import '../../logic/providers/mqtt_provider.dart';
 import '../../logic/providers/auth_provider.dart';
 import '../../data/models/inbody_report.dart';
-import '../dashboard/dashboard_page.dart';
-import '../../core/services/ocr_service.dart';
 import '../../core/utils/inbody_parser.dart';
 import '../../core/services/file_service.dart';
 
@@ -35,7 +30,6 @@ class UploadPageState extends State<UploadPage> {
   String? _selectedFileName;
   bool _isPdf = false;
 
-  final ImagePicker _picker = ImagePicker();
   late final FileService _fileService;
 
   @override
@@ -83,7 +77,10 @@ class UploadPageState extends State<UploadPage> {
     setState(() => _isProcessing = true);
 
     try {
-      String recognizedText = await _fileService.recognizeImage(bytes, filePath);
+      String recognizedText = await _fileService.recognizeImage(
+        bytes,
+        filePath,
+      );
 
       setState(() {
         _extractedText = recognizedText.isNotEmpty
@@ -160,14 +157,18 @@ class UploadPageState extends State<UploadPage> {
 
   // ===== Manual input dialog (fallback) =====
   Future<void> _showManualInputDialog() async {
-    final weightController =
-        TextEditingController(text: _parsedMetrics["weight"]?.toString());
-    final fatController =
-        TextEditingController(text: _parsedMetrics["bodyFatPercent"]?.toString());
-    final muscleController =
-        TextEditingController(text: _parsedMetrics["muscleMass"]?.toString());
-    final visceralController =
-        TextEditingController(text: _parsedMetrics["visceralFat"]?.toString());
+    final weightController = TextEditingController(
+      text: _parsedMetrics["weight"]?.toString(),
+    );
+    final fatController = TextEditingController(
+      text: _parsedMetrics["bodyFatPercent"]?.toString(),
+    );
+    final muscleController = TextEditingController(
+      text: _parsedMetrics["muscleMass"]?.toString(),
+    );
+    final visceralController = TextEditingController(
+      text: _parsedMetrics["visceralFat"]?.toString(),
+    );
 
     return showDialog(
       context: context,
@@ -179,20 +180,33 @@ class UploadPageState extends State<UploadPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildManualTextField(
-                  weightController, "weight (kg)", Icons.monitor_weight),
+                weightController,
+                "weight (kg)",
+                Icons.monitor_weight,
+              ),
               _buildManualTextField(
-                  fatController, "bodyFatPercent (%)", Icons.pie_chart),
+                fatController,
+                "bodyFatPercent (%)",
+                Icons.pie_chart,
+              ),
               _buildManualTextField(
-                  muscleController, "muscleMass (kg)", Icons.fitness_center),
+                muscleController,
+                "muscleMass (kg)",
+                Icons.fitness_center,
+              ),
               _buildManualTextField(
-                  visceralController, "visceralFat", Icons.opacity),
+                visceralController,
+                "visceralFat",
+                Icons.opacity,
+              ),
             ],
           ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("cancel")),
+            onPressed: () => Navigator.pop(context),
+            child: const Text("cancel"),
+          ),
           ElevatedButton(
             onPressed: () async {
               final metrics = {
@@ -206,7 +220,7 @@ class UploadPageState extends State<UploadPage> {
                 _parsedMetrics = metrics;
               });
               await _saveReportToFirestore(metrics);
-              if (mounted) Navigator.pop(context);
+              if (context.mounted) Navigator.pop(context);
             },
             child: const Text("confirm"),
           ),
@@ -218,9 +232,11 @@ class UploadPageState extends State<UploadPage> {
   // ===== Save to Firestore =====
   Future<void> _saveReportToFirestore(Map<String, dynamic> metrics) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
     if (auth.user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("please login to save reports")));
+      messenger.showSnackBar(
+        const SnackBar(content: Text("please login to save reports")),
+      );
       return;
     }
 
@@ -241,17 +257,22 @@ class UploadPageState extends State<UploadPage> {
           .add(report.toMap());
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text("The data has been successfully saved to the cloud.")));
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text("The data has been successfully saved to the cloud."),
+          ),
+        );
       }
     } catch (e) {
       developer.log("Firestore Save Error", error: e, name: "upload_page");
     }
   }
 
-
   // ===== Logout =====
   Future<void> _handleLogout() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final mqtt = Provider.of<MqttProvider>(context, listen: false);
+    final navigator = Navigator.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -264,9 +285,7 @@ class UploadPageState extends State<UploadPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text("Logout"),
           ),
         ],
@@ -274,12 +293,10 @@ class UploadPageState extends State<UploadPage> {
     );
 
     if (confirmed ?? false) {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final mqtt = Provider.of<MqttProvider>(context, listen: false);
       await auth.logout();
       mqtt.disconnect();
       if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        navigator.pushNamedAndRemoveUntil('/', (route) => false);
       }
     }
   }
@@ -307,12 +324,7 @@ class UploadPageState extends State<UploadPage> {
             child: IconButton(
               icon: const Icon(Icons.dashboard),
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const DashboardPage(),
-                  ),
-                );
+                Navigator.pushNamed(context, '/dashboard');
               },
             ),
           ),
@@ -336,12 +348,16 @@ class UploadPageState extends State<UploadPage> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Profile',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text(
+                            'Profile',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                           Text(
                             auth.user?.email ?? 'Unknown',
                             style: const TextStyle(
-                                fontSize: 12, color: Colors.grey),
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
                           ),
                         ],
                       ),
@@ -355,10 +371,7 @@ class UploadPageState extends State<UploadPage> {
                     children: [
                       const Icon(Icons.logout, size: 20, color: Colors.red),
                       const SizedBox(width: 12),
-                      const Text(
-                        'Logout',
-                        style: TextStyle(color: Colors.red),
-                      ),
+                      const Text('Logout', style: TextStyle(color: Colors.red)),
                     ],
                   ),
                 ),
@@ -369,7 +382,9 @@ class UploadPageState extends State<UploadPage> {
                 child: Text(
                   (auth.user?.email?.substring(0, 1) ?? 'U').toUpperCase(),
                   style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold),
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -420,8 +435,10 @@ class UploadPageState extends State<UploadPage> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                   const SizedBox(width: 12),
-                  Text("Processing... please wait",
-                      style: TextStyle(color: Colors.blue[700])),
+                  Text(
+                    "Processing... please wait",
+                    style: TextStyle(color: Colors.blue[700]),
+                  ),
                 ],
               ),
             ],
@@ -429,18 +446,25 @@ class UploadPageState extends State<UploadPage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_extractedText,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(
+                  _extractedText,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
                 const Divider(),
                 if (_parsedMetrics.isNotEmpty) ...[
+                  _buildMetricTile("weight", "${_parsedMetrics["weight"]} kg"),
                   _buildMetricTile(
-                      "weight", "${_parsedMetrics["weight"]} kg"),
-                  _buildMetricTile("bodyFatPercent",
-                      "${_parsedMetrics["bodyFatPercent"]} %"),
+                    "bodyFatPercent",
+                    "${_parsedMetrics["bodyFatPercent"]} %",
+                  ),
                   _buildMetricTile(
-                      "muscleMass", "${_parsedMetrics["muscleMass"]} kg"),
+                    "muscleMass",
+                    "${_parsedMetrics["muscleMass"]} kg",
+                  ),
                   _buildMetricTile(
-                      "visceralFat", "${_parsedMetrics["visceralFat"]}"),
+                    "visceralFat",
+                    "${_parsedMetrics["visceralFat"]}",
+                  ),
                 ],
               ],
             ),
@@ -484,8 +508,7 @@ class UploadPageState extends State<UploadPage> {
               top: 10,
               right: 10,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.black54,
                   borderRadius: BorderRadius.circular(4),
@@ -493,9 +516,10 @@ class UploadPageState extends State<UploadPage> {
                 child: const Text(
                   "SAMPLE",
                   style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold),
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -516,8 +540,10 @@ class UploadPageState extends State<UploadPage> {
               const SizedBox(height: 12),
               Text(
                 _selectedFileName ?? "PDF File",
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -532,10 +558,13 @@ class UploadPageState extends State<UploadPage> {
       child: _fileBytes != null
           ? Image.memory(_fileBytes!, fit: BoxFit.contain)
           : !kIsWeb && _imageFile != null
-              ? Image.file(File(_imageFile!.path), fit: BoxFit.contain)
-              : const Center(
-                  child: Text("Failed to load preview.",
-                      style: TextStyle(color: Colors.white))),
+          ? Image.file(File(_imageFile!.path), fit: BoxFit.contain)
+          : const Center(
+              child: Text(
+                "Failed to load preview.",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
     );
   }
 
@@ -545,7 +574,7 @@ class UploadPageState extends State<UploadPage> {
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(0.05),
+        color: Colors.blue.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -554,13 +583,20 @@ class UploadPageState extends State<UploadPage> {
           Expanded(
             child: Row(
               children: [
-                const Icon(Icons.check_circle_outline,
-                    size: 16, color: Colors.blue),
+                const Icon(
+                  Icons.check_circle_outline,
+                  size: 16,
+                  color: Colors.blue,
+                ),
                 const SizedBox(width: 8),
                 Flexible(
-                  child: Text(label,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w500, fontSize: 15)),
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 15,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -572,7 +608,7 @@ class UploadPageState extends State<UploadPage> {
               fontSize: 16,
               color: Colors.blue,
             ),
-          )
+          ),
         ],
       ),
     );
@@ -580,7 +616,10 @@ class UploadPageState extends State<UploadPage> {
 
   // ===== Manual text field =====
   Widget _buildManualTextField(
-      TextEditingController controller, String label, IconData icon) {
+    TextEditingController controller,
+    String label,
+    IconData icon,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextField(
@@ -592,9 +631,7 @@ class UploadPageState extends State<UploadPage> {
           prefixIcon: Icon(icon, color: Colors.blue),
           filled: true,
           fillColor: Colors.grey[50],
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: Colors.blue, width: 2),

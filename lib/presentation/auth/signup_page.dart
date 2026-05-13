@@ -29,10 +29,7 @@ class _SignupPageState extends State<SignupPage> {
     final auth = Provider.of<AuthProvider>(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Sign Up"),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text("Sign Up"), elevation: 0),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -51,8 +48,8 @@ class _SignupPageState extends State<SignupPage> {
                 Text(
                   'Create Account',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
@@ -134,16 +131,19 @@ class _SignupPageState extends State<SignupPage> {
                                 _emailController.text.trim(),
                                 _passwordController.text.trim(),
                               );
-                              if (mounted && auth.isAuthenticated) {
+                              if (context.mounted && auth.isAuthenticated) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text(
-                                        'Account created successfully! Welcome!'),
+                                      'Account created successfully! Welcome!',
+                                    ),
                                     backgroundColor: Colors.green,
                                   ),
                                 );
-                                Navigator.of(context)
-                                    .pushNamedAndRemoveUntil('/', (route) => false);
+                                Navigator.of(context).pushNamedAndRemoveUntil(
+                                  '/',
+                                  (route) => false,
+                                );
                               }
                             }
                           },
@@ -160,8 +160,9 @@ class _SignupPageState extends State<SignupPage> {
                             width: 24,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
                         : const Text(

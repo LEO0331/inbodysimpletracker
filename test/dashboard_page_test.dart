@@ -1,3 +1,5 @@
+// ignore_for_file: subtype_of_sealed_class
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,13 +13,24 @@ import 'package:inbodysimpletracker/data/models/inbody_report.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 
 class MockAuthProvider extends Mock implements AuthProvider {}
+
 class MockMqttProvider extends Mock implements MqttProvider {}
+
 class MockFirebaseFirestore extends Mock implements FirebaseFirestore {}
-class MockCollectionReference extends Mock implements CollectionReference<Map<String, dynamic>> {}
-class MockDocumentReference extends Mock implements DocumentReference<Map<String, dynamic>> {}
-class MockQuerySnapshot extends Mock implements QuerySnapshot<Map<String, dynamic>> {}
+
+class MockCollectionReference extends Mock
+    implements CollectionReference<Map<String, dynamic>> {}
+
+class MockDocumentReference extends Mock
+    implements DocumentReference<Map<String, dynamic>> {}
+
+class MockQuerySnapshot extends Mock
+    implements QuerySnapshot<Map<String, dynamic>> {}
+
 class MockUser extends Mock implements User {}
-class MockQueryDocumentSnapshot extends Mock implements QueryDocumentSnapshot<Map<String, dynamic>> {}
+
+class MockQueryDocumentSnapshot extends Mock
+    implements QueryDocumentSnapshot<Map<String, dynamic>> {}
 
 void main() {
   late MockAuthProvider mockAuth;
@@ -53,12 +66,20 @@ void main() {
     when(() => mockMqtt.initMqtt(any())).thenAnswer((_) async {});
 
     // Firestore structure
-    when(() => mockFirestore.collection("users")).thenReturn(mockUsersCollection);
+    when(
+      () => mockFirestore.collection("users"),
+    ).thenReturn(mockUsersCollection);
     when(() => mockUsersCollection.doc("test_uid")).thenReturn(mockUserDoc);
-    when(() => mockUserDoc.collection("reports")).thenReturn(mockReportsCollection);
-    when(() => mockReportsCollection.orderBy("reportDate", descending: true)).thenReturn(mockReportsCollection);
-    when(() => mockReportsCollection.snapshots()).thenAnswer((_) => streamController.stream);
-    
+    when(
+      () => mockUserDoc.collection("reports"),
+    ).thenReturn(mockReportsCollection);
+    when(
+      () => mockReportsCollection.orderBy("reportDate", descending: true),
+    ).thenReturn(mockReportsCollection);
+    when(
+      () => mockReportsCollection.snapshots(),
+    ).thenAnswer((_) => streamController.stream);
+
     when(() => mockSnapshot.docs).thenReturn([]);
   });
 
@@ -79,37 +100,39 @@ void main() {
   }
 
   group('DashboardPage Widget Tests', () {
-    testWidgets('Should show "No history reports yet." when list is empty', (tester) async {
+    testWidgets('Should show "No history reports yet." when list is empty', (
+      tester,
+    ) async {
       await tester.pumpWidget(createWidgetToTest());
-      
+
       streamController.add(mockSnapshot);
-      await (tester as WidgetTester).pumpAndSettle();
+      await tester.pumpAndSettle();
 
       expect(find.text('No history reports yet.'), findsOneWidget);
     });
 
     testWidgets('Should render report list when data exists', (tester) async {
-       final mockDoc = MockQueryDocumentSnapshot();
-       when(() => mockDoc.id).thenReturn('report_1');
-       when(() => mockDoc.data()).thenReturn({
-         'reportDate': Timestamp.now(),
-         'weight': 80.0,
-         'bodyFatPercent': 20.0,
-         'muscleMass': 40.0,
-       });
-       when(() => mockSnapshot.docs).thenReturn([mockDoc]);
+      final mockDoc = MockQueryDocumentSnapshot();
+      when(() => mockDoc.id).thenReturn('report_1');
+      when(() => mockDoc.data()).thenReturn({
+        'reportDate': Timestamp.now(),
+        'weight': 80.0,
+        'bodyFatPercent': 20.0,
+        'muscleMass': 40.0,
+      });
+      when(() => mockSnapshot.docs).thenReturn([mockDoc]);
 
-       await tester.pumpWidget(createWidgetToTest());
-       
-       streamController.add(mockSnapshot);
-       await tester.pumpAndSettle();
+      await tester.pumpWidget(createWidgetToTest());
 
-       expect(find.text('Weight: 80.0 kg'), findsOneWidget);
+      streamController.add(mockSnapshot);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Weight: 80.0 kg'), findsOneWidget);
     });
 
     testWidgets('Should handle full analysis dialog', (tester) async {
       await tester.pumpWidget(createWidgetToTest());
-      
+
       streamController.add(mockSnapshot);
       await tester.pumpAndSettle();
 
@@ -119,11 +142,13 @@ void main() {
       expect(find.text('Combined Trend Analysis'), findsOneWidget);
       await tester.tap(find.byType(IconButton).first);
       await tester.pumpAndSettle();
-      
+
       expect(find.text('Combined Trend Analysis'), findsNothing);
     });
 
-    testWidgets('Should show MQTT live section when reports exist', (tester) async {
+    testWidgets('Should show MQTT live section when reports exist', (
+      tester,
+    ) async {
       final mockLiveReport = InbodyReport(
         id: 'mqtt_1',
         reportDate: DateTime.now(),
@@ -132,12 +157,12 @@ void main() {
         muscleMass: 35.0,
         visceralFat: 5,
       );
-      
+
       when(() => mockMqtt.mqttReports).thenReturn([mockLiveReport]);
       when(() => mockMqtt.isConnected).thenReturn(true);
 
       await tester.pumpWidget(createWidgetToTest());
-      
+
       streamController.add(mockSnapshot);
       await tester.pumpAndSettle();
 
@@ -147,14 +172,18 @@ void main() {
 
     testWidgets('Should handle metric chip selection', (tester) async {
       await tester.pumpWidget(createWidgetToTest());
-      
+
       streamController.add(mockSnapshot);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Fat %'));
       await tester.pumpAndSettle();
 
-      final fatChip = tester.widget<ChoiceChip>(find.byWidgetPredicate((w) => w is ChoiceChip && (w.label as Text).data == 'Fat %'));
+      final fatChip = tester.widget<ChoiceChip>(
+        find.byWidgetPredicate(
+          (w) => w is ChoiceChip && (w.label as Text).data == 'Fat %',
+        ),
+      );
       expect(fatChip.selected, isTrue);
     });
   });
