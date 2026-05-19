@@ -109,6 +109,51 @@ void main() {
       verify(() => mockReportsCollection.add(any())).called(1);
     });
 
+    testWidgets('Should auto-save Chinese InBody 270 OCR metrics', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      const mockOcrText = '''
+        檢測日期/時間 2026.05.18. 20:08
+        體重 71.3 kg
+        骨骼肌重 27.4 kg
+        體脂肪率 30.1 %
+        內臟脂肪級別 9
+      ''';
+      when(
+        () => mockFileService.recognizeImage(any(), any()),
+      ).thenAnswer((_) async => mockOcrText);
+      when(
+        () => mockReportsCollection.add(any()),
+      ).thenAnswer((_) async => _MockDocumentReference());
+
+      await tester.pumpWidget(createWidgetToTest());
+
+      final state = tester.state<UploadPageState>(find.byType(UploadPage));
+      await state.processImageBytes(Uint8List(10), 'test.jpg');
+
+      await tester.pumpAndSettle();
+
+      final savedReport =
+          verify(() => mockReportsCollection.add(captureAny())).captured.single
+              as Map<String, dynamic>;
+      expect(savedReport['weight'], 71.3);
+      expect(savedReport['bodyFatPercent'], 30.1);
+      expect(savedReport['muscleMass'], 27.4);
+      expect(savedReport['visceralFat'], 9.0);
+      expect(
+        (savedReport['reportDate'] as Timestamp).toDate(),
+        DateTime(2026, 5, 18, 20, 8),
+      );
+      expect(
+        find.text('The data has been successfully saved to the cloud.'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('Should handle successful PDF extraction and auto-save', (
       tester,
     ) async {
