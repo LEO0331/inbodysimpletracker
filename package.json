@@ -1,5 +1,9 @@
 {
   "dependencies": {
     "firebase-tools": "^15.32.1"
+  },
+  "overrides": {
+    "basic-ftp": "^6.2.2",
+    "uuid": "^11.1.1"
   }
 }
