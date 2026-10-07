@@ -198,8 +198,8 @@ lib/
 ## 🔧 Technologies & Dependencies
 
 ### Core Framework
-- **Flutter 3.11+** - UI framework
-- **Dart 3.11+** - Programming language
+- **Flutter 3.44+** - UI framework
+- **Dart 3.12+** - Programming language
 
 ### State Management
 - **Provider 6.1.2** - State management and dependency injection
@@ -225,8 +225,8 @@ See `pubspec.yaml` for complete dependencies list.
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Flutter 3.11+ installed
-- Dart 3.11+ SDK
+- Flutter 3.44+ installed
+- Dart 3.12+ SDK
 - Firebase project set up
 - iOS/Android development environment
 

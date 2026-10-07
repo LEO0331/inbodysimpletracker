@@ -57,3 +57,17 @@ macos/Runner/GoogleService-Info.plist
 *.[aA][vV][iI]
 *.[mM][kK][vV]
 *.[wW][eE][bB][mM]
+
+# Personal Apple Health exports and future local health databases are runtime data.
+**/apple_health_export/
+[eE]xport.xml
+[eE]xport_cda.xml
+[eE]xport.zip
+**/private_health_data/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.healthbackup

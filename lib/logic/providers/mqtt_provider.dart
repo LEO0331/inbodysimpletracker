@@ -17,9 +17,8 @@ class MqttProvider with ChangeNotifier {
   _updatesSubscription;
   bool _isDisposed = false;
 
-  MqttProvider({FirestoreService? firestoreService, MqttClient? client})
-    : _firestoreService = firestoreService ?? FirestoreService(),
-      _client = client;
+  MqttProvider({FirestoreService? firestoreService, this._client})
+    : _firestoreService = firestoreService ?? FirestoreService();
 
   List<InbodyReport> mqttReports = [];
   bool _isConnected = false;
