@@ -13,7 +13,7 @@ void main() {
   });
 
   test('optional numeric fields reject malformed and nonfinite numbers', () {
-    for (final value in ['bad', 'NaN', 'Infinity', '-1']) {
+    for (final value in ['bad', 'NaN', 'Infinity', '-1', '0']) {
       expect(optionalNumber(value), isNotNull, reason: value);
     }
     expect(optionalNumber(''), isNull);
@@ -26,9 +26,33 @@ void main() {
     for (final value in ['0', '10.1', 'NaN', 'invalid']) {
       expect(optionalNumber(value, rpe: true), isNotNull);
     }
-    for (final value in ['', '1', '6', '10']) {
+    for (final value in ['', '1', '6', '6.5', '10']) {
       expect(optionalNumber(value, rpe: true), isNull);
     }
+  });
+
+  test('length limits and video metadata are validated', () {
+    expect(requiredExercise('e' * 121), isNotNull);
+    expect(optionalNotes('n' * 4001), isNotNull);
+    expect(optionalLoadUnit('u' * 21), isNotNull);
+    expect(optionalNotes('n' * 4000), isNull);
+    expect(
+      requiredVideo('/a/video.MOV', fileName: 'video.MOV', sizeBytes: 1),
+      isNull,
+    );
+    expect(
+      requiredVideo('/a/video.mp4', fileName: 'video.exe', sizeBytes: 1),
+      isNotNull,
+    );
+    expect(requiredVideo('/a/video.mp4', sizeBytes: 0), isNotNull);
+    expect(
+      requiredVideo('/a/video.mp4', sizeBytes: 11, maxSizeBytes: 10),
+      isNotNull,
+    );
+    expect(
+      requiredVideo('/a/video.mp4', sizeBytes: 10, maxSizeBytes: 10),
+      isNull,
+    );
   });
 
   test('month filters clamp to calendar month end', () {

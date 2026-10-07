@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
 import 'package:inbodysimpletracker/data/models/training_checkpoint.dart';
+import 'package:inbodysimpletracker/core/utils/checkpoint_validation.dart';
 import 'package:inbodysimpletracker/data/services/checkpoint_service.dart';
 import 'package:inbodysimpletracker/data/services/local_video_service.dart';
 import 'package:inbodysimpletracker/logic/providers/checkpoint_provider.dart';
@@ -14,6 +15,9 @@ class _Metadata extends Mock implements CheckpointService {}
 class _Videos extends Mock implements LocalVideoService {}
 
 class _Picker extends FilePicker {
+  _Picker({this.file, this.cancel = false});
+  final PlatformFile? file;
+  final bool cancel;
   @override
   Future<FilePickerResult?> pickFiles({
     String? dialogTitle,
@@ -32,12 +36,15 @@ class _Picker extends FilePicker {
     expect(type, FileType.custom);
     expect(allowedExtensions, containsAll(['mp4', 'mov']));
     expect(withData, isFalse);
+    expect(allowCompression, isFalse);
+    if (cancel) return null;
     return FilePickerResult([
-      PlatformFile(
-        name: 'runtime.mov',
-        size: 1024,
-        path: '/runtime/selection.mov',
-      ),
+      file ??
+          PlatformFile(
+            name: 'runtime.mov',
+            size: 1024,
+            path: '/runtime/selection.mov',
+          ),
     ]);
   }
 }
@@ -85,13 +92,18 @@ void main() {
       () => metadata.deleteCheckpoint('user', any()),
     ).thenAnswer((_) async {});
     when(() => videos.isSupported).thenReturn(true);
-    when(() => videos.resolvePath(any())).thenAnswer((_) async => null);
-    when(() => videos.deleteVideo(any())).thenAnswer((_) async {});
+    when(
+      () => videos.resolvePath(any(), checkpointId: any(named: 'checkpointId')),
+    ).thenAnswer((_) async => null);
+    when(
+      () => videos.deleteVideo(any(), checkpointId: any(named: 'checkpointId')),
+    ).thenAnswer((_) async {});
     when(
       () => videos.copyVideo(
         checkpointId: 'new',
         sourcePath: '/runtime/selection.mov',
         originalFileName: 'runtime.mov',
+        maxSizeBytes: defaultMaxVideoBytes,
       ),
     ).thenAnswer((_) async => 'training_videos/new/runtime.mov');
     provider = CheckpointProvider(
@@ -170,6 +182,66 @@ void main() {
     },
   );
 
+  testWidgets(
+    'invalid selection reports size limit and cancellation preserves video',
+    (tester) async {
+      await showHistory(tester);
+      await tester.tap(find.text('Add Checkpoint'));
+      await tester.pumpAndSettle();
+      FilePicker.platform = _Picker(
+        file: PlatformFile(
+          name: 'huge.mov',
+          size: defaultMaxVideoBytes + 1,
+          path: '/runtime/huge.mov',
+        ),
+      );
+      await tester.tap(find.text('Select video from Files'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('size limit'), findsOneWidget);
+      expect(find.textContaining('huge.mov •'), findsNothing);
+      FilePicker.platform = _Picker();
+      await tester.tap(find.text('Select video from Files'));
+      await tester.pumpAndSettle();
+      FilePicker.platform = _Picker(cancel: true);
+      await tester.tap(find.text('Select video from Files'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('runtime.mov •'), findsOneWidget);
+      verifyNever(() => metadata.saveCheckpoint('user', any()));
+    },
+  );
+
+  testWidgets(
+    'failed metadata deletion refreshes video path and allows retry',
+    (tester) async {
+      when(
+        () => metadata.deleteCheckpoint('user', recent.id),
+      ).thenThrow(StateError('denied'));
+      await showHistory(tester);
+      await tester.tap(find.text('Hip Abduction'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Delete checkpoint'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('video was removed'), findsOneWidget);
+      expect(
+        find.text('Video is not available on this device.'),
+        findsOneWidget,
+      );
+      verify(
+        () =>
+            videos.resolvePath(recent.localVideoPath, checkpointId: recent.id),
+      ).called(2);
+      when(
+        () => metadata.deleteCheckpoint('user', recent.id),
+      ).thenAnswer((_) async {});
+      await tester.tap(find.byTooltip('Delete checkpoint'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(find.text('Hip Abduction'), findsNothing);
+    },
+  );
   testWidgets('detail handles missing local video and confirms deletion', (
     tester,
   ) async {
@@ -181,14 +253,19 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
-    verifyNever(() => videos.deleteVideo(any()));
+    verifyNever(
+      () => videos.deleteVideo(any(), checkpointId: any(named: 'checkpointId')),
+    );
     await tester.tap(find.byTooltip('Delete checkpoint'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
-    verify(() => videos.deleteVideo(recent.localVideoPath)).called(1);
+    verify(
+      () => videos.deleteVideo(recent.localVideoPath, checkpointId: recent.id),
+    ).called(1);
     verify(() => metadata.deleteCheckpoint('user', recent.id)).called(1);
     expect(find.text('Video is not available on this device.'), findsNothing);
+    expect(find.text('Hip Abduction'), findsNothing);
   });
 
   testWidgets(
@@ -225,6 +302,7 @@ void main() {
           checkpointId: 'new',
           sourcePath: '/runtime/selection.mov',
           originalFileName: 'runtime.mov',
+          maxSizeBytes: defaultMaxVideoBytes,
         ),
       );
       await tester.ensureVisible(load);
@@ -256,6 +334,12 @@ void main() {
     await tester.tap(find.text('All'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Last 3 months').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Hip Abduction'), findsOneWidget);
+    expect(find.text('Old Squat'), findsNothing);
+    await tester.tap(find.text('Last 3 months').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Last 6 months').last);
     await tester.pumpAndSettle();
     expect(find.text('Hip Abduction'), findsOneWidget);
     expect(find.text('Old Squat'), findsNothing);

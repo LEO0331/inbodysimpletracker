@@ -13,12 +13,24 @@ unit, sets, reps, RPE (1–10), and notes. History shows newest first, with exer
 side, and All / last 3 months / last 6 months filters. Open a checkpoint to play,
 pause, or seek its video; confirm deletion to remove the managed video and metadata.
 
+New checkpoints require a trimmed exercise name (up to 120 characters). Optional
+load, sets, and reps must be positive; load and RPE allow decimals. Notes allow
+4,000 characters and load units allow 20. Supported filename extensions are MP4,
+MOV, and M4V, case-insensitively. The default video limit is **2 GiB**, configurable
+through `CheckpointProvider(maxVideoBytes: ...)`; the copied file's actual size is
+checked as well as the picker metadata. Existing historical values remain readable.
+
 **Training video files are stored locally on the device and are not uploaded to
 Firebase or included in the repository.** On save, the selected file is copied
 into the application's documents directory under
 `training_videos/{checkpointId}/{sanitizedFilename}`. Metadata stores a relative
 reference; playback resolves it against the current app directory rather than
 relying on the original Downloads path. The source video remains untouched.
+Imports reserve each destination exclusively, so duplicate names across checkpoints
+are safe and a concurrent import cannot overwrite an existing managed copy. Playback
+and deletion require the managed directory to match the checkpoint ID. Unsupported,
+malformed, or foreign references are treated as unavailable and cannot delete another
+checkpoint's video.
 
 Checkpoint metadata is cloud-synced through
 `users/{uid}/checkpoints/{checkpointId}`. Existing `users/{uid}/reports/{reportId}`
@@ -44,12 +56,42 @@ Limitations:
   pending while offline. If metadata deletion fails after local video removal,
   retry deleting the remaining checkpoint; its detail page handles the missing
   video gracefully.
+- History includes older records missing a checkpoint date (displayed with a stable
+  fallback date). Pending local Firestore writes are not shown as saved checkpoints
+  until acknowledged. Copy/save/delete errors identify which stage failed; if local
+  cleanup fails, the app reports that a managed copy may remain. Abrupt termination
+  during an import can also leave a local file without metadata; automatic orphan
+  recovery is not implemented.
 - This feature is personal recording only: no analysis, recognition, upload, or
   automated comparisons. Duration is optional metadata.
 
 Checkpoint tests use mocks, fake paths, and tiny temporary byte files; no actual
 training video fixtures are required. `.gitignore` excludes training video
 directories and common video extensions as an additional safeguard.
+
+#### Manual iPhone verification
+
+1. Sign in, open Training Checkpoints, and choose an MP4 from Files / Downloads.
+   Save a checkpoint and verify the original file remains in Files.
+2. Play, pause, and seek; leave detail, reopen it, and verify playback still works.
+3. Force-close and reopen the app, then restart the phone and open the checkpoint
+   again. The managed copy should still play without needing the source file.
+4. Repeat with an iPhone MOV/H.264 or HEVC recording supported by the device.
+   Codec support comes from the platform player; unsupported/corrupt files should
+   show an error, with no transcoding or new Photos permissions.
+5. Import a second video with the same filename. Verify both checkpoints still
+   play their own copies and exercise/side/3-month/6-month filters work.
+6. Test missing local video on another device: metadata should remain visible and
+   detail should say "Video is not available on this device."
+7. Cancel deletion, then confirm deletion. Verify the history updates immediately
+   and the original Files video stays untouched.
+8. Check invalid numbers, overly long notes/exercise, an unsupported extension,
+   and the configured size limit. Confirm Save is disabled during processing.
+9. Test offline save/delete and denied Firestore writes. The operation may remain
+   pending offline; failures must report the stage and allow retry after reconnecting.
+
+This checklist requires a physical iPhone; automated tests use fake controllers
+and temporary byte files and cannot verify native codecs or Files provider behavior.
 
 ### Authentication
 - ✅ User registration and login with Firebase Authentication

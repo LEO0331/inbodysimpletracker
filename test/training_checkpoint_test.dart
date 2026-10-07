@@ -1,8 +1,52 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inbodysimpletracker/data/models/training_checkpoint.dart';
+import 'package:mocktail/mocktail.dart';
+
+class MockTimestamp extends Mock implements Timestamp {}
 
 void main() {
+  test(
+    'malformed timestamps fall back without interrupting history parsing',
+    () {
+      final timestamp = MockTimestamp();
+      when(timestamp.toDate).thenThrow(RangeError('invalid timestamp'));
+      final parsed = TrainingCheckpoint.fromMap('id', {
+        'checkpointDate': timestamp,
+        'createdAt': timestamp,
+        'updatedAt': timestamp,
+      });
+      final fallback = DateTime.fromMillisecondsSinceEpoch(0);
+      expect(parsed.checkpointDate, fallback);
+      expect(parsed.createdAt, fallback);
+      expect(parsed.updatedAt, fallback);
+    },
+  );
+  test(
+    'rejects integers beyond exact cross-platform range and preserves zero history',
+    () {
+      for (final value in [
+        9007199254740992,
+        '9007199254740993',
+        '9007199254740990.5',
+        1e30,
+      ]) {
+        final parsed = TrainingCheckpoint.fromMap('bad', {
+          'sets': value,
+          'reps': value,
+          'durationMs': value,
+          'fileSizeBytes': value,
+        });
+        expect(parsed.sets, isNull);
+        expect(parsed.reps, isNull);
+        expect(parsed.durationMs, isNull);
+        expect(parsed.fileSizeBytes, isNull);
+      }
+      expect(TrainingCheckpoint.fromMap('old', {'sets': 0}).sets, 0);
+      expect(TrainingCheckpoint.fromMap('old', {'sets': '3.0'}).sets, 3);
+      expect(TrainingCheckpoint.fromMap('old', {'sets': '1.5e1'}).sets, 15);
+    },
+  );
   test('metadata round trip preserves all fields and excludes ID', () {
     final date = DateTime(2026, 10, 7);
     final checkpoint = TrainingCheckpoint(

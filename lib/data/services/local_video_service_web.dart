@@ -1,3 +1,5 @@
+import '../../core/utils/checkpoint_validation.dart';
+
 class LocalVideoService {
   bool get isSupported => false;
 
@@ -5,11 +7,15 @@ class LocalVideoService {
     required String checkpointId,
     required String sourcePath,
     required String originalFileName,
+    int maxSizeBytes = defaultMaxVideoBytes,
   }) async => throw UnsupportedError(
     'Adding local video checkpoints is currently available on mobile.',
   );
 
-  Future<String?> resolvePath(String relativePath) async => null;
+  Future<String?> resolvePath(
+    String relativePath, {
+    String? checkpointId,
+  }) async => null;
 
-  Future<void> deleteVideo(String relativePath) async {}
+  Future<void> deleteVideo(String relativePath, {String? checkpointId}) async {}
 }

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inbodysimpletracker/data/services/local_video_service_mobile.dart';
+import 'package:inbodysimpletracker/data/services/local_video_copy_exception.dart';
 
 void main() {
   late Directory temporaryDirectory;
@@ -96,6 +97,199 @@ void main() {
     expect(
       await Directory('${temporaryDirectory.path}/training_videos/id').exists(),
       isFalse,
+    );
+  });
+
+  test(
+    'binds references to IDs and re-resolves Documents after restart',
+    () async {
+      final source = File('${temporaryDirectory.path}/source.tmp');
+      await source.writeAsBytes([1, 2, 3]);
+      final first = await service.copyVideo(
+        checkpointId: 'first',
+        sourcePath: source.path,
+        originalFileName: 'clip.MOV',
+      );
+      final second = await service.copyVideo(
+        checkpointId: 'second',
+        sourcePath: source.path,
+        originalFileName: 'clip.MOV',
+      );
+      final restarted = LocalVideoService(
+        documentsDirectory: () async => temporaryDirectory,
+      );
+      expect(
+        await restarted.resolvePath(first, checkpointId: 'first'),
+        isNotNull,
+      );
+      expect(
+        await restarted.resolvePath(second, checkpointId: 'first'),
+        isNull,
+      );
+      await restarted.deleteVideo(second, checkpointId: 'first');
+      expect(
+        await restarted.resolvePath(second, checkpointId: 'second'),
+        isNotNull,
+      );
+      expect(await source.readAsBytes(), [1, 2, 3]);
+    },
+  );
+
+  test(
+    'concurrent copies reserve a destination without overwriting the winner',
+    () async {
+      final source = File('${temporaryDirectory.path}/source.tmp');
+      await source.writeAsBytes([4, 5, 6]);
+      Future<Object> copy() async {
+        try {
+          return await service.copyVideo(
+            checkpointId: 'same',
+            sourcePath: source.path,
+            originalFileName: 'clip.mp4',
+          );
+        } catch (error) {
+          return error;
+        }
+      }
+
+      final results = await Future.wait([copy(), copy()]);
+      expect(results.whereType<String>().length, 1);
+      expect(
+        results.whereType<Exception>().length +
+            results.whereType<Error>().length,
+        1,
+      );
+      final path = await service.resolvePath(
+        results.whereType<String>().single,
+      );
+      expect(await File(path!).readAsBytes(), [4, 5, 6]);
+    },
+  );
+
+  test(
+    'checks actual length, empty sources, and allowed extensions before copying',
+    () async {
+      final source = File('${temporaryDirectory.path}/source.tmp');
+      await source.writeAsBytes([1, 2, 3, 4]);
+      await expectLater(
+        service.copyVideo(
+          checkpointId: 'large',
+          sourcePath: source.path,
+          originalFileName: 'clip.mov',
+          maxSizeBytes: 3,
+        ),
+        throwsArgumentError,
+      );
+      await expectLater(
+        service.copyVideo(
+          checkpointId: 'extension',
+          sourcePath: source.path,
+          originalFileName: 'clip.exe',
+        ),
+        throwsArgumentError,
+      );
+      await source.writeAsBytes([]);
+      await expectLater(
+        service.copyVideo(
+          checkpointId: 'empty',
+          sourcePath: source.path,
+          originalFileName: 'clip.mov',
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        await Directory('${temporaryDirectory.path}/training_videos').exists(),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'relative references resolve against a restored Documents root',
+    () async {
+      final source = File('${temporaryDirectory.path}/source.tmp');
+      await source.writeAsBytes([1, 2]);
+      final originalRoot = Directory(
+        '${temporaryDirectory.path}/original_documents',
+      );
+      final firstService = LocalVideoService(
+        documentsDirectory: () async => originalRoot,
+      );
+      final reference = await firstService.copyVideo(
+        checkpointId: 'id',
+        sourcePath: source.path,
+        originalFileName: 'clip.mp4',
+      );
+      final restoredRoot = await originalRoot.rename(
+        '${temporaryDirectory.path}/restored_documents',
+      );
+      final restartedService = LocalVideoService(
+        documentsDirectory: () async => restoredRoot,
+      );
+      final path = await restartedService.resolvePath(
+        reference,
+        checkpointId: 'id',
+      );
+      expect(path, startsWith(restoredRoot.path));
+      expect(await File(path!).readAsBytes(), [1, 2]);
+    },
+  );
+
+  test(
+    'rejects and cleans a source changed between length validation and copying',
+    () async {
+      final source = File('${temporaryDirectory.path}/source.tmp');
+      await source.writeAsBytes([1, 2]);
+      var rootCalls = 0;
+      final changingService = LocalVideoService(
+        documentsDirectory: () async {
+          if (rootCalls++ == 0) await source.writeAsBytes([1, 2, 3]);
+          return temporaryDirectory;
+        },
+      );
+      await expectLater(
+        changingService.copyVideo(
+          checkpointId: 'id',
+          sourcePath: source.path,
+          originalFileName: 'clip.mp4',
+        ),
+        throwsStateError,
+      );
+      expect(
+        await Directory(
+          '${temporaryDirectory.path}/training_videos/id',
+        ).exists(),
+        isFalse,
+      );
+    },
+  );
+
+  test('reports cleanup failure for an owned partial destination', () async {
+    final source = File('${temporaryDirectory.path}/source.tmp');
+    await source.writeAsBytes([1, 2]);
+    var rootCalls = 0;
+    final changingService = LocalVideoService(
+      documentsDirectory: () async {
+        if (rootCalls++ > 0) {
+          throw StateError('Documents unavailable during cleanup');
+        }
+        await source.writeAsBytes([]);
+        return temporaryDirectory;
+      },
+    );
+    await expectLater(
+      changingService.copyVideo(
+        checkpointId: 'id',
+        sourcePath: source.path,
+        originalFileName: 'clip.mp4',
+      ),
+      throwsA(isA<LocalVideoCopyException>()),
+    );
+    expect(
+      await File(
+        '${temporaryDirectory.path}/training_videos/id/clip.mp4',
+      ).exists(),
+      isTrue,
     );
   });
 }

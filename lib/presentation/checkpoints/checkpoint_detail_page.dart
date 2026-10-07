@@ -23,10 +23,14 @@ class _CheckpointDetailPageState extends State<CheckpointDetailPage> {
     _videoPath = context
         .read<CheckpointProvider>()
         .localVideoService
-        .resolvePath(widget.checkpoint.localVideoPath);
+        .resolvePath(
+          widget.checkpoint.localVideoPath,
+          checkpointId: widget.checkpoint.id,
+        );
   }
 
   Future<void> _delete() async {
+    if (_deleting) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -49,6 +53,8 @@ class _CheckpointDetailPageState extends State<CheckpointDetailPage> {
     if (confirmed != true || !mounted || _deleting) return;
     setState(() => _deleting = true);
     try {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
       await context.read<CheckpointProvider>().deleteCheckpoint(
         widget.checkpoint,
       );
@@ -58,16 +64,31 @@ class _CheckpointDetailPageState extends State<CheckpointDetailPage> {
         ).showSnackBar(const SnackBar(content: Text('Checkpoint deleted.')));
         Navigator.pop(context);
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unable to delete checkpoint. Please try again.'),
+          SnackBar(
+            content: Text(
+              error is CheckpointOperationException
+                  ? error.message
+                  : 'Unable to delete checkpoint. Please try again.',
+            ),
           ),
         );
       }
     } finally {
-      if (mounted) setState(() => _deleting = false);
+      if (mounted) {
+        setState(() {
+          _videoPath = context
+              .read<CheckpointProvider>()
+              .localVideoService
+              .resolvePath(
+                widget.checkpoint.localVideoPath,
+                checkpointId: widget.checkpoint.id,
+              );
+          _deleting = false;
+        });
+      }
     }
   }
 

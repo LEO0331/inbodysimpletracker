@@ -55,18 +55,16 @@ class _CheckpointListPageState extends State<CheckpointListPage> {
     final since = _months == 0
         ? null
         : calendarMonthsAgo(DateTime.now(), _months);
-    final checkpoints =
-        provider.checkpoints
-            .where(
-              (c) =>
-                  c.exerciseName.toLowerCase().contains(
-                    _exercise.toLowerCase().trim(),
-                  ) &&
-                  (_side == null || c.side == _side) &&
-                  (since == null || !c.checkpointDate.isBefore(since)),
-            )
-            .toList()
-          ..sort((a, b) => b.checkpointDate.compareTo(a.checkpointDate));
+    final checkpoints = provider.checkpoints
+        .where(
+          (c) =>
+              c.exerciseName.toLowerCase().contains(
+                _exercise.toLowerCase().trim(),
+              ) &&
+              (_side == null || c.side == _side) &&
+              (since == null || !c.checkpointDate.isBefore(since)),
+        )
+        .toList();
     return Scaffold(
       appBar: AppBar(title: const Text('Training Checkpoints')),
       floatingActionButton: FloatingActionButton.extended(
@@ -92,6 +90,7 @@ class _CheckpointListPageState extends State<CheckpointListPage> {
                     Expanded(
                       child: DropdownButtonFormField<CheckpointSide>(
                         initialValue: _side,
+                        isExpanded: true,
                         hint: const Text('All sides'),
                         decoration: const InputDecoration(labelText: 'Side'),
                         items: [
@@ -113,6 +112,7 @@ class _CheckpointListPageState extends State<CheckpointListPage> {
                     Expanded(
                       child: DropdownButtonFormField<int>(
                         initialValue: _months,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Date'),
                         items: const [
                           DropdownMenuItem(value: 0, child: Text('All')),

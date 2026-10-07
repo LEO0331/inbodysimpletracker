@@ -66,9 +66,13 @@ class TrainingCheckpoint {
     final data = map ?? <String, dynamic>{};
     final fallback = DateTime.fromMillisecondsSinceEpoch(0);
     DateTime date(dynamic value) {
-      if (value is Timestamp) return value.toDate();
-      if (value is DateTime) return value;
-      if (value is String) return DateTime.tryParse(value) ?? fallback;
+      try {
+        if (value is Timestamp) return value.toDate();
+        if (value is DateTime) return value;
+        if (value is String) return DateTime.tryParse(value) ?? fallback;
+      } catch (_) {
+        // Malformed imported dates must not prevent the remaining history loading.
+      }
       return fallback;
     }
 
@@ -84,9 +88,43 @@ class TrainingCheckpoint {
     }
 
     int? integer(dynamic value) {
+      if (value is String) {
+        // Parse decimal strings exactly before converting: large fractional
+        // strings can round to whole doubles and must not become valid counts.
+        final match = RegExp(
+          r'^\+?(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$',
+        ).firstMatch(value.trim());
+        if (match == null) return null;
+        final fraction = match.group(2) ?? '';
+        final exponent = int.tryParse(match.group(3) ?? '0');
+        if (exponent == null ||
+            exponent > value.length + 16 ||
+            exponent < -value.length) {
+          return null;
+        }
+        var digits = '${match.group(1)}$fraction'.replaceFirst(
+          RegExp(r'^0+'),
+          '',
+        );
+        if (digits.isEmpty) return 0;
+        final scale = exponent - fraction.length;
+        if (scale >= 0) {
+          if (digits.length + scale > 16) return null;
+          digits = '$digits${'0' * scale}';
+        } else {
+          final remove = -scale;
+          if (remove >= digits.length || !digits.endsWith('0' * remove)) {
+            return null;
+          }
+          digits = digits.substring(0, digits.length - remove);
+        }
+        final exact = int.tryParse(digits);
+        return exact != null && exact <= 9007199254740991 ? exact : null;
+      }
       final parsed = number(value);
       return parsed != null &&
               parsed >= 0 &&
+              parsed <= 9007199254740991 &&
               parsed == parsed.truncateToDouble()
           ? parsed.toInt()
           : null;

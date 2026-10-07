@@ -51,11 +51,9 @@ macos/Runner/GoogleService-Info.plist
 
 # User-selected training videos are runtime data, never source assets.
 **/training_videos/
-*.mp4
-*.mov
-*.m4v
-*.avi
-*.mkv
-*.webm
-*.MP4
-*.MOV
+*.[mM][pP]4
+*.[mM][oO][vV]
+*.[mM]4[vV]
+*.[aA][vV][iI]
+*.[mM][kK][vV]
+*.[wW][eE][bB][mM]

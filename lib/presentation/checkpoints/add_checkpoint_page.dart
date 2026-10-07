@@ -47,6 +47,17 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
     super.dispose();
   }
 
+  int get _maxVideoBytes =>
+      Provider.of<CheckpointProvider?>(context, listen: false)?.maxVideoBytes ??
+      defaultMaxVideoBytes;
+
+  String? _validateVideo(PlatformFile? video) => requiredVideo(
+    video?.path,
+    fileName: video?.name,
+    sizeBytes: video?.size,
+    maxSizeBytes: _maxVideoBytes,
+  );
+
   Future<void> _pickVideo() async {
     setState(() => _picking = true);
     try {
@@ -54,15 +65,14 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
         type: FileType.custom,
         allowedExtensions: ['mp4', 'mov', 'm4v'],
         withData: false,
+        allowCompression: false,
       );
       if (!mounted) return;
       if (selection != null && selection.files.isNotEmpty) {
         final video = selection.files.single;
         setState(() {
-          _video = video.path?.isNotEmpty == true ? video : null;
-          _videoError = _video == null
-              ? 'The selected file is not accessible. Please choose it again.'
-              : null;
+          _videoError = _validateVideo(video);
+          _video = _videoError == null ? video : null;
         });
       }
     } catch (_) {
@@ -77,7 +87,7 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
   Future<void> _save() async {
     if (_saving) return;
     final valid = _form.currentState!.validate();
-    setState(() => _videoError = requiredVideo(_video?.path));
+    setState(() => _videoError = _validateVideo(_video));
     if (!valid || _videoError != null) return;
     setState(() => _saving = true);
     try {
@@ -95,11 +105,17 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
         notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
       );
       if (mounted) Navigator.pop(context, true);
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unable to save checkpoint. Please try again.'),
+          SnackBar(
+            content: Text(
+              error is CheckpointOperationException
+                  ? error.message
+                  : error is ArgumentError && error.message is String
+                  ? error.message as String
+                  : 'Unable to save checkpoint. Please try again.',
+            ),
           ),
         );
       }
@@ -146,6 +162,9 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
                       children: [
                         const Text(
                           'The video stays on this device. Only checkpoint metadata is synced.',
+                        ),
+                        Text(
+                          'MP4, MOV, or M4V, up to ${(_maxVideoBytes / (1024 * 1024)).toStringAsFixed(0)} MB.',
                         ),
                         ListTile(
                           contentPadding: EdgeInsets.zero,
@@ -205,6 +224,7 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
                           decoration: const InputDecoration(
                             labelText: 'Load unit',
                           ),
+                          validator: optionalLoadUnit,
                         ),
                         _numeric('Sets (optional)', _sets, integer: true),
                         _numeric('Reps (optional)', _reps, integer: true),
@@ -215,6 +235,7 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
                             labelText: 'Notes (optional)',
                           ),
                           maxLines: 3,
+                          validator: optionalNotes,
                         ),
                         const SizedBox(height: 16),
                         OutlinedButton.icon(
@@ -241,12 +262,23 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
                         FilledButton(
                           onPressed: _saving || _picking ? null : _save,
                           child: _saving
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
+                              ? const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Flexible(
+                                      child: Text(
+                                        'Copying video and saving metadata…',
+                                      ),
+                                    ),
+                                  ],
                                 )
                               : const Text('Save'),
                         ),
