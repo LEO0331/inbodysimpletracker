@@ -10,8 +10,8 @@ A=c[0]
 B=a.updateHolder(c[20],B)
 B.oa.prototype={
 zn(){var x=this,w=x.b
-return A.a8(["reportDate",A.b08(1000*w.a+w.b),"weight",x.c,"bodyFatPercent",x.d,"muscleMass",x.e,"visceralFat",x.f],y.g,y.b)}}
+return A.a8(["reportDate",A.b0i(1000*w.a+w.b),"weight",x.c,"bodyFatPercent",x.d,"muscleMass",x.e,"visceralFat",x.f],y.g,y.b)}}
 var z=a.updateTypes([]);(function inheritance(){var x=a.inherit
 x(B.oa,A.t)})()
 var y={g:A.T("h"),b:A.T("@")}};
-(a=>{a["wrtgzHYbcj/UQrzQ2TNYxwpG7M4="]=a.current})($__dart_deferred_initializers__);
+(a=>{a["pIUIyxQnsg3CsVkIh4H9xTFaUP0="]=a.current})($__dart_deferred_initializers__);
