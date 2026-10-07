@@ -8,6 +8,8 @@ import 'firebase_options.dart';
 import 'logic/providers/auth_provider.dart';
 import 'logic/providers/report_provider.dart';
 import 'presentation/auth/home_page.dart';
+import 'presentation/checkpoints/checkpoint_entry_page.dart'
+    deferred as checkpoints;
 import 'presentation/auth/login_page.dart' deferred as login_page;
 import 'presentation/auth/signup_page.dart' deferred as signup_page;
 import 'presentation/admin/admin_page.dart' deferred as admin_page;
@@ -194,6 +196,13 @@ class MyApp extends StatelessWidget {
           loadLibrary: admin_page.loadLibrary,
           builder: () => admin_page.AdminPage(),
           label: 'Loading admin tools...',
+        );
+      case '/checkpoints':
+        return _buildDeferredRoute(
+          settings: settings,
+          loadLibrary: checkpoints.loadLibrary,
+          builder: () => checkpoints.CheckpointEntryPage(),
+          label: 'Loading training checkpoints...',
         );
       default:
         return MaterialPageRoute<void>(

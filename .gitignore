@@ -48,3 +48,14 @@ android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 macos/Runner/GoogleService-Info.plist
 .omx
+
+# User-selected training videos are runtime data, never source assets.
+**/training_videos/
+*.mp4
+*.mov
+*.m4v
+*.avi
+*.mkv
+*.webm
+*.MP4
+*.MOV

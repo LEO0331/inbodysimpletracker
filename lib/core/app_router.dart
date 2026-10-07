@@ -7,6 +7,7 @@ import '../presentation/dashboard/dashboard_page.dart';
 import '../presentation/upload/upload_page.dart';
 import '../presentation/admin/admin_page.dart';
 import '../presentation/auth/home_page.dart';
+import '../presentation/checkpoints/checkpoint_entry_page.dart';
 
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -33,6 +34,8 @@ class AppRouter {
         );
       case '/admin':
         return MaterialPageRoute(builder: (_) => const AdminPage());
+      case '/checkpoints':
+        return MaterialPageRoute(builder: (_) => const CheckpointEntryPage());
       default:
         return MaterialPageRoute(
           builder: (_) => Scaffold(

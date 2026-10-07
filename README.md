@@ -4,6 +4,53 @@ A Flutter application for tracking InBody fitness reports, cloud storage, and an
 
 ## 🎯 Features
 
+### Training Checkpoints
+
+Open **Training Checkpoints** from the signed-in home page or drawer. Add an
+existing MP4/MOV video through the system Files picker (including iPhone Files /
+Downloads), then record the date, exercise, side, camera angle, optional load and
+unit, sets, reps, RPE (1–10), and notes. History shows newest first, with exercise,
+side, and All / last 3 months / last 6 months filters. Open a checkpoint to play,
+pause, or seek its video; confirm deletion to remove the managed video and metadata.
+
+**Training video files are stored locally on the device and are not uploaded to
+Firebase or included in the repository.** On save, the selected file is copied
+into the application's documents directory under
+`training_videos/{checkpointId}/{sanitizedFilename}`. Metadata stores a relative
+reference; playback resolves it against the current app directory rather than
+relying on the original Downloads path. The source video remains untouched.
+
+Checkpoint metadata is cloud-synced through
+`users/{uid}/checkpoints/{checkpointId}`. Existing `users/{uid}/reports/{reportId}`
+data is unchanged. Firestore access rules must allow the signed-in owner to read,
+create, and delete their checkpoints (the deployed rules are not included in this
+repository). No Firebase Storage or video binary/base64 is used.
+
+Limitations:
+
+- Uninstalling the application may remove locally stored videos.
+- Videos are not automatically available on another device. Missing local videos
+  display **"Video is not available on this device."** Metadata syncing does not
+  synchronize video files. Deletion on another device cannot remove the original
+  device's local copy.
+- Adding local video checkpoints is currently available on mobile (iOS/Android).
+  Web can display checkpoint metadata but cannot save or play these mobile files.
+  Existing InBody web functionality remains available.
+- Saving metadata requires Firestore access; a failed save cleans up the copied
+  video when possible. Large videos require enough local free space. Playback
+  support depends on the device's video codecs; a file extension alone does not
+  guarantee a playable video.
+- Firestore save/delete operations wait for server acknowledgement and may remain
+  pending while offline. If metadata deletion fails after local video removal,
+  retry deleting the remaining checkpoint; its detail page handles the missing
+  video gracefully.
+- This feature is personal recording only: no analysis, recognition, upload, or
+  automated comparisons. Duration is optional metadata.
+
+Checkpoint tests use mocks, fake paths, and tiny temporary byte files; no actual
+training video fixtures are required. `.gitignore` excludes training video
+directories and common video extensions as an additional safeguard.
+
 ### Authentication
 - ✅ User registration and login with Firebase Authentication
 - ✅ Email/password authentication

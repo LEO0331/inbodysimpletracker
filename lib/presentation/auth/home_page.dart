@@ -77,6 +77,16 @@ class HomePage extends StatelessWidget {
                       onPressed: () =>
                           Navigator.pushNamed(context, '/dashboard'),
                     ),
+                    const SizedBox(height: 12),
+                    _buildActionButton(
+                      context,
+                      label: 'Training Checkpoints',
+                      icon: Icons.video_library_outlined,
+                      color: Theme.of(context).colorScheme.primary,
+                      isOutlined: true,
+                      onPressed: () =>
+                          Navigator.pushNamed(context, '/checkpoints'),
+                    ),
                   ] else ...[
                     _buildActionButton(
                       context,
@@ -166,6 +176,14 @@ class HomePage extends StatelessWidget {
             },
           ),
           const Divider(),
+          ListTile(
+            leading: const Icon(Icons.video_library_outlined),
+            title: const Text('Training Checkpoints'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/checkpoints');
+            },
+          ),
           if (auth.isAdmin)
             ListTile(
               leading: const Icon(
