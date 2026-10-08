@@ -49,6 +49,7 @@ void main() {
     mqttProvider = MqttProvider(
       firestoreService: mockFirestore,
       client: mockClient,
+      enabled: true,
     );
 
     when(() => mockClient.updates).thenAnswer((_) => updatesController.stream);
@@ -72,9 +73,47 @@ void main() {
   });
 
   group('MqttProvider Unit Tests', () {
+    test(
+      'default provider cannot connect even with an injected client',
+      () async {
+        final disabled = MqttProvider(
+          firestoreService: mockFirestore,
+          client: mockClient,
+        );
+        await disabled.initMqtt('uid_123');
+        expect(disabled.isConnected, isFalse);
+        expect(disabled.isLoading, isFalse);
+        verifyNever(() => mockClient.connect());
+        expect(disabled.mqttReports, isEmpty);
+        disabled.dispose();
+      },
+    );
+
+    test('opt-in without a configured client cannot connect', () async {
+      final unconfigured = MqttProvider(
+        firestoreService: mockFirestore,
+        enabled: true,
+      );
+      await unconfigured.initMqtt('uid_123');
+      expect(unconfigured.isConnected, isFalse);
+      expect(unconfigured.isLoading, isFalse);
+      unconfigured.dispose();
+    });
+
     test('initMqtt should connect and subscribe', () async {
       await mqttProvider.initMqtt('uid_123');
       expect(mqttProvider.isConnected, isTrue);
+    });
+
+    test('disconnect during connection prevents late subscription', () async {
+      final connection = Completer<MqttClientConnectionStatus>();
+      when(() => mockClient.connect()).thenAnswer((_) => connection.future);
+      final pending = mqttProvider.initMqtt('uid_123');
+      mqttProvider.disconnect();
+      connection.complete(MqttClientConnectionStatus());
+      await pending;
+      expect(mqttProvider.isConnected, isFalse);
+      verifyNever(() => mockClient.subscribe(any(), any()));
     });
 
     test('should handle incoming MQTT message and save to firestore', () async {

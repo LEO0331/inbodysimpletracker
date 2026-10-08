@@ -8,6 +8,8 @@ import '../presentation/upload/upload_page.dart';
 import '../presentation/admin/admin_page.dart';
 import '../presentation/auth/home_page.dart';
 import '../presentation/checkpoints/checkpoint_entry_page.dart';
+import '../presentation/health/health_entry_page.dart';
+import '../presentation/health_cloud_context.dart';
 
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -36,6 +38,12 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const AdminPage());
       case '/checkpoints':
         return MaterialPageRoute(builder: (_) => const CheckpointEntryPage());
+      case '/health':
+        return MaterialPageRoute(
+          builder: (_) => HealthEntryPage(
+            cloudContextBuilder: (_) => const HealthCloudContext(),
+          ),
+        );
       default:
         return MaterialPageRoute(
           builder: (_) => Scaffold(

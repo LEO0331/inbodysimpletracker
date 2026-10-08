@@ -19,6 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify tracked assets are safe to publish
+        run: |
+          python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+          python3 .github/scripts/check_private_assets.py
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -40,6 +45,9 @@ jobs:
 
       - name: Remove sourcemaps fallback (if any)
         run: find build/web -name "*.map" -type f -delete
+
+      - name: Verify web assets are safe to publish
+        run: python3 .github/scripts/check_private_assets.py --web-dir build/web
 
       - name: Web bundle size report
         run: |

@@ -4,6 +4,58 @@ A Flutter application for tracking InBody fitness reports, cloud storage, and an
 
 ## 🎯 Features
 
+### Experimental Local Health recorder
+
+**Open Local Health** is available without signing in and while Firebase startup
+is pending or unavailable. The new vault is independent of cloud account IDs.
+Apple Health observations and context notes use a native SQLCipher database under
+application support storage, with a device-only protected key. There is no
+Firestore, MQTT, analytics, AI, or GitHub upload path for imported Health records.
+
+Implemented capabilities:
+
+- Streaming Apple Health XML/ZIP imports with bounded worker batches, progress,
+  cancellation, crash recovery, repeat-import deduplication, and safe import undo.
+  Supported fitness/recovery types include weight, sleep, steps, walking/running
+  distance, activity energy, exercise time, resting heart rate, HRV SDNN and VO2 max.
+  Clinical/CDA records, demographics and unsupported types are not imported.
+- Weekly source-separated summaries, original-record or explicitly chosen fixed
+  timezone offsets, coverage gaps, and conservative overlap handling. Partial
+  totals are withheld when the selected range exceeds 5,000 observations; sleep
+  uses bounded prior-episode context. XML totals are not presented as exact Apple
+  Health statistics or medical/training advice.
+- Device-local context notes and an optional, explicitly opened read-only view of
+  existing cloud-backed InBody/checkpoint metadata. Those legacy records retain
+  their existing storage and permission rules; they are not moved into the vault.
+- Portable `.healthbackup` files encrypted with AES-GCM-256 and passphrase-derived
+  keys. A backup is fully authenticated before replacing the vault in a transaction.
+  **These backups contain local Health data and notes only. Videos and cloud-backed
+  InBody/checkpoint metadata are excluded and will not be restored.** Keep the
+  passphrase separately; forgotten passwords cannot be recovered by the app.
+- Vault contents hide and storage closes when the app backgrounds. Android Files
+  selections survive as in-memory pending paths, but an explicit vault reopening
+  is required before import resumes. Restore requires a fresh passphrase and
+  replacement confirmation after reopening.
+
+**Personal imports, restores and new notes are disabled by default** pending native
+device validation. Do not use personal exports for development fixtures. Run the
+synthetic native checks in [the validation guide](docs/local-health-validation.md),
+complete backup/protection/lifecycle/performance verification, and only then build
+with `--dart-define=HEALTH_VAULT_VERIFIED=true`. Direct HealthKit refresh and automatic
+cloud sync are not implemented. Web shows a native-only notice and retains all
+existing InBody functionality; it never uploads an export as a workaround.
+
+The native vault is excluded from iOS automatic backups and uses complete file
+protection. Android automatic backup/device transfer is disabled, including other
+app-local files; manual Health backups are required for portability. Uninstall or
+lost device keys can remove access to local data. Files export asks for a destination
+and copies only an encrypted backup; the original selected XML/ZIP stays untouched.
+
+Public MQTT is no longer opened automatically. Legacy MQTT ingestion requires
+explicit opt-in and a caller-configured client; the normal app has it disabled.
+CI checks tracked files and built Web assets before publishing, rejecting exports,
+local databases, backups and videos. No real Health data is bundled with this app.
+
 ### Training Checkpoints
 
 Open **Training Checkpoints** from the signed-in home page or drawer. Add an

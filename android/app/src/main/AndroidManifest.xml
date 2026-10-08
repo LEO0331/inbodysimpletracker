@@ -2,6 +2,9 @@
     <application
         android:label="inbodysimpletracker"
         android:name="${applicationName}"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/private_health_backup_rules"
+        android:dataExtractionRules="@xml/private_health_extraction_rules"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

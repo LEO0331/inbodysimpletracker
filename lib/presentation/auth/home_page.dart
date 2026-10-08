@@ -107,6 +107,15 @@ class HomePage extends StatelessWidget {
                   ],
 
                   const SizedBox(height: 60),
+                  _buildActionButton(
+                    context,
+                    label: 'Open Local Health',
+                    icon: Icons.lock_outline,
+                    color: Theme.of(context).colorScheme.primary,
+                    isOutlined: true,
+                    onPressed: () => Navigator.pushNamed(context, '/health'),
+                  ),
+                  const SizedBox(height: 24),
                   _buildFeatureCard(
                     icon: Icons.camera,
                     title: 'Smart Scan',

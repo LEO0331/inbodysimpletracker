@@ -4,21 +4,22 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 
-// ✅ 根據平台引入不同的 Client 設置
-import 'mqtt_setup_mobile.dart' if (dart.library.html) 'mqtt_setup_web.dart';
-
 import '../../data/models/inbody_report.dart';
 import '../../data/services/firestore_service.dart';
 
 class MqttProvider with ChangeNotifier {
   final FirestoreService _firestoreService;
-  MqttClient? _client;
+  final MqttClient? _client;
   StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>?
   _updatesSubscription;
   bool _isDisposed = false;
+  final bool enabled;
 
-  MqttProvider({FirestoreService? firestoreService, this._client})
-    : _firestoreService = firestoreService ?? FirestoreService();
+  MqttProvider({
+    FirestoreService? firestoreService,
+    this._client,
+    this.enabled = false,
+  }) : _firestoreService = firestoreService ?? FirestoreService();
 
   List<InbodyReport> mqttReports = [];
   bool _isConnected = false;
@@ -29,14 +30,20 @@ class MqttProvider with ChangeNotifier {
 
   /// 初始化 MQTT 並訂閱使用者專屬 Topic
   Future<void> initMqtt(String uid) async {
-    developer.log("🚀 開始連線 MQTT，UID: $uid", name: "mqtt.provider");
-    if (_isConnected || _isLoading) return;
+    // Legacy ingestion requires explicit opt-in and a caller-configured client.
+    // The normal app never connects to a public broker.
+    if (!enabled ||
+        _client == null ||
+        _isDisposed ||
+        _isConnected ||
+        _isLoading) {
+      return;
+    }
 
     _isLoading = true;
     mqttReports.clear(); // 清除舊數據
     _notifyIfActive();
 
-    const String broker = 'broker.emqx.io';
     final String uniqueId =
         'flutter_${uid}_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -44,10 +51,7 @@ class MqttProvider with ChangeNotifier {
     final String userTopic = "inbody/users/$uid/data";
     final String statusTopic = "inbody/users/$uid/status";
 
-    // ✅ Use injected client if available, otherwise create new
-    _client ??= getMqttClient(broker, uniqueId);
-
-    _client!.keepAlivePeriod = 20;
+    _client.keepAlivePeriod = 20;
 
     // ✅ 設定連線訊息與遺囑 (Last Will)
     final connMessage = MqttConnectMessage()
@@ -58,26 +62,29 @@ class MqttProvider with ChangeNotifier {
         .withWillQos(MqttQos.atLeastOnce)
         .withWillRetain();
 
-    _client!.connectionMessage = connMessage;
+    _client.connectionMessage = connMessage;
 
-    _client!.onDisconnected = () {
+    _client.onDisconnected = () {
       _isConnected = false;
       _notifyIfActive();
-      developer.log("MQTT Disconnected for user: $uid", name: "mqtt.provider");
+      developer.log("MQTT disconnected", name: "mqtt.provider");
     };
 
     try {
-      await _client!.connect();
+      await _client.connect();
+      if (_isDisposed || !_isLoading) {
+        _client.disconnect();
+        return;
+      }
       _isConnected = true;
 
       // ✅ 訂閱自定義 Topic
-      _client!.subscribe(userTopic, MqttQos.atLeastOnce);
-      developer.log("📡 Subscribed to: $userTopic", name: "mqtt.provider");
+      _client.subscribe(userTopic, MqttQos.atLeastOnce);
 
       // 連線後發布一個在線狀態 (選配)
       final builder = MqttClientPayloadBuilder();
       builder.addString('online');
-      _client!.publishMessage(
+      _client.publishMessage(
         statusTopic,
         MqttQos.atLeastOnce,
         builder.payload!,
@@ -85,9 +92,10 @@ class MqttProvider with ChangeNotifier {
       );
 
       _updatesSubscription?.cancel();
-      _updatesSubscription = _client!.updates!.listen((
+      _updatesSubscription = _client.updates!.listen((
         List<MqttReceivedMessage<MqttMessage>> c,
       ) {
+        if (!enabled || _isDisposed || !_isConnected || c.isEmpty) return;
         final MqttPublishMessage recMess = c[0].payload as MqttPublishMessage;
         final String pt = MqttPublishPayload.bytesToStringAsString(
           recMess.payload.message,
@@ -96,8 +104,8 @@ class MqttProvider with ChangeNotifier {
         // 收到數據，傳入 uid 進行儲存
         _handleIncomingJson(pt, uid);
       });
-    } catch (e) {
-      developer.log("MQTT Connect Error", name: "mqtt.provider", error: e);
+    } catch (_) {
+      developer.log("MQTT connection failed", name: "mqtt.provider");
       _isConnected = false;
     } finally {
       _isLoading = false;
@@ -106,6 +114,7 @@ class MqttProvider with ChangeNotifier {
   }
 
   void _handleIncomingJson(String rawJson, String uid) async {
+    if (!enabled || _isDisposed || !_isConnected) return;
     try {
       final Map<String, dynamic> data = jsonDecode(rawJson);
 
@@ -120,12 +129,13 @@ class MqttProvider with ChangeNotifier {
       // ✅ 自動儲存到 Firestore
       await _firestoreService.addReport(uid, newReport);
       developer.log("✅ Auto-saved report to Firestore", name: "mqtt.provider");
-    } catch (e) {
-      developer.log("JSON Parsing Error", name: "mqtt.provider", error: e);
+    } catch (_) {
+      developer.log("MQTT report processing failed", name: "mqtt.provider");
     }
   }
 
   void disconnect() {
+    _isLoading = false;
     _updatesSubscription?.cancel();
     _updatesSubscription = null;
     _client?.disconnect();
@@ -142,6 +152,7 @@ class MqttProvider with ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _isConnected = false;
     _updatesSubscription?.cancel();
     _client?.disconnect();
     super.dispose();

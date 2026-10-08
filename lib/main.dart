@@ -8,6 +8,8 @@ import 'firebase_options.dart';
 import 'logic/providers/auth_provider.dart';
 import 'logic/providers/report_provider.dart';
 import 'presentation/auth/home_page.dart';
+import 'presentation/health_cloud_context.dart';
+import 'presentation/health/health_entry_page.dart' deferred as health_page;
 import 'presentation/checkpoints/checkpoint_entry_page.dart'
     deferred as checkpoints;
 import 'presentation/auth/login_page.dart' deferred as login_page;
@@ -23,14 +25,22 @@ void main() {
 }
 
 class BootstrapApp extends StatefulWidget {
-  const BootstrapApp({super.key});
+  const BootstrapApp({
+    super.key,
+    this.initializeCloud,
+    this.localHealthBuilder,
+  });
+  final Future<void> Function()? initializeCloud;
+  final WidgetBuilder? localHealthBuilder;
 
   @override
   State<BootstrapApp> createState() => _BootstrapAppState();
 }
 
 class _BootstrapAppState extends State<BootstrapApp> {
-  late final Future<void> _bootstrapFuture = _bootstrap();
+  late final Future<void> _bootstrapFuture =
+      widget.initializeCloud?.call() ?? _bootstrap();
+  bool _localMode = false;
 
   Future<void> _bootstrap() async {
     await Firebase.initializeApp(
@@ -51,7 +61,9 @@ class _BootstrapAppState extends State<BootstrapApp> {
     return FutureBuilder<void>(
       future: _bootstrapFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            !snapshot.hasError &&
+            !_localMode) {
           return const MyApp();
         }
 
@@ -59,7 +71,13 @@ class _BootstrapAppState extends State<BootstrapApp> {
           title: 'InBody Tracker',
           debugShowCheckedModeBanner: false,
           theme: _buildTheme(),
-          home: const _StartupScreen(),
+          home: _StartupScreen(
+            cloudFailed: snapshot.hasError,
+            onLocalModeChanged: (active) {
+              if (mounted) setState(() => _localMode = active);
+            },
+            localHealthBuilder: widget.localHealthBuilder,
+          ),
         );
       },
     );
@@ -67,7 +85,14 @@ class _BootstrapAppState extends State<BootstrapApp> {
 }
 
 class _StartupScreen extends StatelessWidget {
-  const _StartupScreen();
+  const _StartupScreen({
+    this.cloudFailed = false,
+    required this.onLocalModeChanged,
+    this.localHealthBuilder,
+  });
+  final bool cloudFailed;
+  final ValueChanged<bool> onLocalModeChanged;
+  final WidgetBuilder? localHealthBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -93,15 +118,42 @@ class _StartupScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Preparing your dashboard...',
+                  cloudFailed
+                      ? 'Cloud features are unavailable. Local Health can still open.'
+                      : 'Preparing your dashboard...',
                   style: Theme.of(
                     context,
                   ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
                 ),
                 const SizedBox(height: 20),
-                const SizedBox(
-                  width: 240,
-                  child: LinearProgressIndicator(minHeight: 4),
+                if (!cloudFailed)
+                  const SizedBox(
+                    width: 240,
+                    child: LinearProgressIndicator(minHeight: 4),
+                  ),
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.lock_outline),
+                  label: const Text('Open Local Health'),
+                  onPressed: () async {
+                    onLocalModeChanged(true);
+                    try {
+                      await Navigator.of(context).push(
+                        localHealthBuilder == null
+                            ? _buildDeferredRoute(
+                                settings: const RouteSettings(name: '/health'),
+                                loadLibrary: health_page.loadLibrary,
+                                builder: () => health_page.HealthEntryPage(),
+                                label: 'Opening Local Health...',
+                              )
+                            : MaterialPageRoute<void>(
+                                builder: localHealthBuilder!,
+                              ),
+                      );
+                    } finally {
+                      onLocalModeChanged(false);
+                    }
+                  },
                 ),
               ],
             ),
@@ -203,6 +255,15 @@ class MyApp extends StatelessWidget {
           loadLibrary: checkpoints.loadLibrary,
           builder: () => checkpoints.CheckpointEntryPage(),
           label: 'Loading training checkpoints...',
+        );
+      case '/health':
+        return _buildDeferredRoute(
+          settings: settings,
+          loadLibrary: health_page.loadLibrary,
+          builder: () => health_page.HealthEntryPage(
+            cloudContextBuilder: (_) => const HealthCloudContext(),
+          ),
+          label: 'Opening Local Health...',
         );
       default:
         return MaterialPageRoute<void>(

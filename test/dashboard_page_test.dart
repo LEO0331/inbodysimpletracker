@@ -109,6 +109,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('No history reports yet.'), findsOneWidget);
+      verifyNever(() => mockMqtt.initMqtt(any()));
     });
 
     testWidgets('Should render report list when data exists', (tester) async {
