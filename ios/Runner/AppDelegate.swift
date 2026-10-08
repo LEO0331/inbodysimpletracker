@@ -4,6 +4,7 @@ import UIKit
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UIDocumentPickerDelegate {
   private var pendingHealthExport: FlutterResult?
+  private let healthKitBridge = NativeHealthKitBridge()
   private var healthVisible = false
   private var healthPrivacyCovers: [UIView] = []
   private var healthPrivacyObservers: [NSObjectProtocol] = []
@@ -36,6 +37,10 @@ import UIKit
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
     )
     channel.setMethodCallHandler { [weak self] call, result in
+      if call.method.hasPrefix("healthKit"), let self = self {
+        self.healthKitBridge.handle(call, result: result)
+        return
+      }
       if call.method == "setSensitiveView", let self = self,
          let args = call.arguments as? [String: Any], let visible = args["visible"] as? Bool {
         self.healthVisible = visible

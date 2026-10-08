@@ -37,18 +37,25 @@ Implemented capabilities:
   **These backups contain local Health data and notes only. Videos and cloud-backed
   InBody/checkpoint metadata are excluded and will not be restored.** Keep the
   passphrase separately; forgotten passwords cannot be recovered by the app.
+- Explicit read-only HealthKit refresh on iPhone for selected supported categories.
+  New samples and deletions update the encrypted vault with their cursor in one
+  transaction. Refresh can be canceled and resumed; imported XML and HealthKit
+  sources remain separate. Completing the permission sheet does not prove read
+  access was granted. No background access or HealthKit writes are requested.
+  Backups accept both format versions; restore resets device-relative refresh
+  cursors so the next refresh reads the destination Health store.
 - Vault contents hide and storage closes when the app backgrounds. Android Files
   selections survive as in-memory pending paths, but an explicit vault reopening
   is required before import resumes. Restore requires a fresh passphrase and
   replacement confirmation after reopening.
 
-**Personal imports, restores and new notes are disabled by default** pending native
+**Personal imports, HealthKit access, restores and new notes are disabled by default** pending native
 device validation. Do not use personal exports for development fixtures. Run the
 synthetic native checks in [the validation guide](docs/local-health-validation.md),
 complete protection/lifecycle/performance verification (and recovery checks for
 any optional backups you use), and only then build
-with `--dart-define=HEALTH_VAULT_VERIFIED=true`. Direct HealthKit refresh and automatic
-cloud sync are not implemented. Web shows a native-only notice and retains all
+with `--dart-define=HEALTH_VAULT_VERIFIED=true`. Automatic cloud sync is not implemented.
+Web shows a native-only notice and retains all
 existing InBody functionality; it never uploads an export as a workaround.
 
 The native vault is excluded from iOS automatic backups and uses complete file
@@ -57,7 +64,9 @@ app-local files. Backups are optional: Apple Health records can be reimported fr
 a fresh export, but app-specific notes are not stored in Apple Health or automatically
 synced to iCloud. Uninstall or lost device keys can remove access to local data.
 Files export asks for a destination
-and copies only an encrypted backup; the original selected XML/ZIP stays untouched.
+and copies only an encrypted backup, including to private iCloud Drive if chosen;
+the original selected XML/ZIP stays untouched. Export requires passphrase
+confirmation; restoring requires explicit confirmation that the vault is replaced.
 
 Public MQTT is no longer opened automatically. Legacy MQTT ingestion requires
 explicit opt-in and a caller-configured client; the normal app has it disabled.

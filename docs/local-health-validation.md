@@ -21,8 +21,10 @@ The private planning notes stay in ignored `.omx/plans/`.
 4. **Personal context and portable recovery:** local notes, encrypted streaming
    backups, full authentication before transactional restore, and user-selected
    native Files export. Current backup scope is the local vault only.
-5. **Later scope:** direct read-only HealthKit updates, longer-range review views,
-   and optional full-recorder backups including opt-in videos and
+5. **Read-only HealthKit:** explicit iPhone refresh for selected supported types,
+   bounded anchored pages, atomic sample/deletion/cursor updates, cancellation,
+   and separate HealthKit sources. No write or background permissions are requested.
+6. **Later scope:** longer-range review views and optional full-recorder backups including opt-in videos and
    cloud-metadata snapshots. These are not implemented or represented as ready.
 
 The current native implementation uses `sqflite_sqlcipher` 3.4.x and
@@ -61,6 +63,16 @@ cover warm reads without raw scans, source/offset separation, empty days, malfor
 payload recovery and atomic invalidation. Analysis and the Web build passed. The
 native integration fixture now checks v1-to-v2 migration and cache rebuilding;
 that physical-device check remains unrun.
+
+HealthKit/backup update verification: 257 Flutter tests passed with zero analyzer
+issues. Synthetic tests cover cursor/sample transaction boundaries, namespace
+isolation, malformed pages, cancellation/partial-error projections, withholding
+incomplete refreshes, empty terminal pages, and version 1/2 backup authentication.
+Host SQLite staging/recovery/cascade checks and four privacy-guard tests passed.
+Web release and Android ARM64 Dart-bundle compilation succeeded. iOS plist/PBX
+structure checks passed, but these are not an Xcode build. The native fixture
+adds v3 migration, staged refresh/reopen and restore checks; those remain unrun
+on a physical device. The personal-data release gate stays disabled.
 
 On a configured iOS/Android simulator or physical device, run:
 
@@ -127,7 +139,8 @@ checks are performed. Source detail is retained in canonical sample identities
 and stored source/time/unit provenance; richer device/creation metadata browsing
 is future work. Original-offset/fixed-offset grouping is explicit and does not
 claim IANA timezone reconstruction or exact Apple Health source-priority totals.
-The native cache uses schema v2; its migration adds only derived tables and retains
+The native vault uses schema v3; migrations add derived cache tables and encrypted
+HealthKit cursor state while retaining
 canonical observations, import lineage, notes and protected keys. Caches are not
 included in backups and rebuild after restore. Per-day safety limits may require
 narrowing the selected source. No diagnostic score or causal inference is
@@ -137,10 +150,32 @@ produced. Real clinical/CDA records are intentionally outside this iteration.
 
 Apple Health's own iCloud sync is separate from this application. It can supply
 records for reimport when enabled, but it does not sync the local vault, cache,
-context notes, or training video copies. Backups remain optional and full-recorder
-backup work is deprioritized. Do not remove native encryption/protection gates.
+context notes, or training video copies. Encrypted vault backups are available
+through Files; full-recorder backups remain future work. Do not remove native
+encryption/protection gates.
 
-An optional future HealthKit refresh would request read access to selected types
-on iPhone, use an incremental anchor to receive new/deleted samples, and update the
-same encrypted local repository. It would avoid repeated XML export/import without
-introducing a GitHub or Firestore upload path. It is not implemented in this update.
+HealthKit refresh requests read access to selected types on iPhone, uses an
+incremental anchor to receive new/deleted samples, and updates the encrypted local
+repository. The permission sheet completing does not establish that any read
+permission was granted: an empty response can also mean no accessible records.
+Refresh is explicit and stops when the vault locks; no background delivery is used.
+XML imports and HealthKit data are separate sources and are not summed together.
+Paginated refreshes retain committed pages and cursors in encrypted storage, but
+withhold that category's HealthKit summaries until the last page completes. Cancel
+or restart preserves progress; refresh again to resume. This prevents partially
+loaded dates from appearing as complete totals.
+
+Version 2 encrypted backups include canonical observations, notes, import lineage
+and refresh state; version 1 backups remain readable. Restore authenticates the
+entire file before replacement and resets HealthKit cursors because they belong to
+the queried store. The next successful first page replaces that metric's restored
+HealthKit snapshot and continues paging. XML observations and notes remain intact.
+Derived caches rebuild after restore. The Files destination may be private iCloud
+Drive; remember the passphrase, which this app does not retain or recover. These
+backups exclude training videos and existing cloud report/checkpoint metadata.
+
+Before enabling personal records, build/sign iOS with the HealthKit entitlement
+and test authorization completion, denied/limited reads, repeat refresh, paginated
+history, deletions, interrupted-page restart, vault locking/cancellation and
+restoring on another installation. Windows-host tests cannot verify these native
+behaviors or Apple provisioning.

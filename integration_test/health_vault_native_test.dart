@@ -132,6 +132,25 @@ void main() {
       expect(await repository.listSources(HealthMetric.weight), [marker]);
       expect(await repository.listSources(HealthMetric.weight), [marker]);
       expect((await db.query('health_source_cache')).length, 1);
+      // Upgrade an existing v2 vault while retaining canonical rows and cache.
+      await repository.close();
+      db = await openDatabase(
+        path,
+        password: key,
+        version: 3,
+        singleInstance: false,
+        onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
+        onUpgrade: (db, oldVersion, newVersion) async {
+          expect(oldVersion, 2);
+          for (final statement in healthKitSchema) {
+            await db.execute(statement);
+          }
+        },
+      );
+      repository = await EncryptedHealthRepository.initializeForTesting(db);
+      expect((await query()).single.id, 'original');
+      expect((await daily()).cacheHitDays, 1);
+      expect(await repository.readHealthKitAnchor(HealthMetric.weight), isNull);
       final repeated = await repository.beginImport();
       expect(
         await repository.appendObservations(repeated, [
@@ -244,6 +263,171 @@ void main() {
       await repository.restoreChunks(Stream.fromIterable(backup));
       expect((await query()).single.id, 'original');
       expect((await daily()).cacheHitDays, 0);
+
+      const liveId = 'hk:weight:00000000-0000-0000-0000-000000000001';
+      final live = HealthObservation(
+        id: liveId,
+        logicalId: liveId,
+        metric: HealthMetric.weight,
+        source: 'HealthKit · Synthetic watch',
+        rawValue: '76',
+        originalUnit: 'kg',
+        canonicalUnit: 'kg',
+        value: 76,
+        start: DateTime.utc(2025),
+        end: DateTime.utc(2025),
+        offsetMinutes: 0,
+      );
+      await repository.applyHealthKitPage(
+        metric: HealthMetric.weight,
+        expectedAnchor: null,
+        nextAnchor: 'AQ==',
+        samples: [live],
+        deletedIds: [],
+        hasMore: true,
+      );
+      expect(
+        (await query()).single.id,
+        'original',
+        reason: 'Partial HealthKit pages cannot contribute to day totals.',
+      );
+      expect(await repository.listSources(HealthMetric.weight), [marker]);
+      final partialBackup = await repository.exportChunks().toList();
+      expect(
+        partialBackup
+            .expand((chunk) => chunk)
+            .any(
+              (row) =>
+                  row['table'] == 'batches' &&
+                  row['id'] == 'healthkit_live:weight' &&
+                  row['status'] == 'importing',
+            ),
+        isTrue,
+      );
+      await repository.restoreChunks(Stream.fromIterable(partialBackup));
+      expect((await query()).single.id, 'original');
+      expect(await repository.readHealthKitAnchor(HealthMetric.weight), isNull);
+      await repository.applyHealthKitPage(
+        metric: HealthMetric.weight,
+        expectedAnchor: null,
+        nextAnchor: 'AQ==',
+        samples: [live],
+        deletedIds: [],
+        hasMore: true,
+      );
+      await repository.close();
+      db = await openDatabase(
+        path,
+        password: key,
+        singleInstance: false,
+        onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
+      );
+      repository = await EncryptedHealthRepository.initializeForTesting(db);
+      expect(
+        await repository.readHealthKitAnchor(HealthMetric.weight),
+        'AQ==',
+        reason: 'Incomplete live page and anchor survive cancellation/reopen.',
+      );
+      expect(
+        (await db.query(
+          'observations',
+          where: 'id = ?',
+          whereArgs: [liveId],
+        )).length,
+        1,
+      );
+      expect((await query()).single.id, 'original');
+      await repository.applyHealthKitPage(
+        metric: HealthMetric.weight,
+        expectedAnchor: 'AQ==',
+        nextAnchor: 'AQ==',
+        samples: [],
+        deletedIds: [],
+      );
+      expect((await query()).length, 2);
+      expect((await daily()).cacheHitDays, 0);
+      await expectLater(
+        repository.applyHealthKitPage(
+          metric: HealthMetric.weight,
+          expectedAnchor: null,
+          nextAnchor: 'Ag==',
+          samples: [],
+          deletedIds: [liveId],
+        ),
+        throwsStateError,
+      );
+      expect(await repository.readHealthKitAnchor(HealthMetric.weight), 'AQ==');
+      expect((await query()).length, 2);
+      final liveBackup = await repository.exportChunks().toList();
+      final forgedBackup = liveBackup
+          .map(
+            (chunk) => chunk.map((row) {
+              if (row['table'] == 'healthkit_cursors') {
+                return <String, Object?>{...row, 'batch_id': repeated};
+              }
+              return row;
+            }).toList(),
+          )
+          .toList();
+      await expectLater(
+        repository.restoreChunks(Stream.fromIterable(forgedBackup)),
+        throwsFormatException,
+      );
+      expect(
+        (await query()).length,
+        2,
+        reason: 'Failed restore rolls back canonical data.',
+      );
+      expect(await repository.readHealthKitAnchor(HealthMetric.weight), 'AQ==');
+      await repository.deleteHealthKitData();
+      expect((await query()).single.id, 'original');
+      expect(await repository.readHealthKitAnchor(HealthMetric.weight), isNull);
+      await repository.restoreChunks(Stream.fromIterable(liveBackup));
+      expect(
+        await repository.readHealthKitAnchor(HealthMetric.weight),
+        isNull,
+        reason: 'Restore resets store-relative anchors for destination device.',
+      );
+      await repository.applyHealthKitPage(
+        metric: HealthMetric.weight,
+        expectedAnchor: null,
+        nextAnchor: 'AQ==',
+        samples: [],
+        deletedIds: [],
+      );
+      expect(
+        (await query()).single.id,
+        'original',
+        reason: 'First page replaces stale restored live rows, retaining XML.',
+      );
+      await repository.applyHealthKitPage(
+        metric: HealthMetric.weight,
+        expectedAnchor: 'AQ==',
+        nextAnchor: 'Ag==',
+        samples: [live],
+        deletedIds: [],
+      );
+      expect((await query()).length, 2, reason: 'Stable IDs update in-place.');
+      await repository.applyHealthKitPage(
+        metric: HealthMetric.weight,
+        expectedAnchor: 'Ag==',
+        nextAnchor: 'Aw==',
+        samples: [],
+        deletedIds: [liveId],
+      );
+      expect(
+        (await query()).single.id,
+        'original',
+        reason: 'XML rows survive live deletions.',
+      );
+      await repository.deleteImport('healthkit_live:weight');
+      expect(
+        await repository.readHealthKitAnchor(HealthMetric.weight),
+        isNull,
+        reason:
+            'Deleting live history cascades its cursor for a fresh refresh.',
+      );
+      await repository.deleteHealthKitData();
 
       expect(
         await privacy.invokeMethod<bool>('protectDirectory', {

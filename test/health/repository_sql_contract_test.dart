@@ -130,7 +130,7 @@ void main() {
       verifyInOrder([
         () => transaction.delete(
           'batches',
-          where: 'status != ?',
+          where: "status != ? AND id NOT GLOB 'healthkit_live:*'",
           whereArgs: ['ready'],
         ),
         () => transaction.execute(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../core/utils/health_aggregation.dart';
 import '../../data/models/health_observation.dart';
@@ -6,6 +7,9 @@ import '../../data/services/health_import_service.dart';
 import '../../data/services/health_backup_service.dart';
 import '../../data/services/health_store.dart';
 import '../../data/services/health_summary_cache.dart';
+import '../../data/services/healthkit_client.dart';
+import '../../data/services/healthkit_repository.dart';
+import '../../data/services/healthkit_refresh_service.dart';
 
 /// A device-local vault. Never depends on a cloud account or cloud services.
 class HealthProvider extends ChangeNotifier {
@@ -13,6 +17,7 @@ class HealthProvider extends ChangeNotifier {
     HealthRepository? repository,
     bool? personalImportEnabled,
     HealthImportService Function(HealthRepository)? importServiceFactory,
+    this.healthKitClient,
   }) : repository = repository ?? createHealthRepository(),
        personalImportEnabled =
            personalImportEnabled ??
@@ -24,6 +29,18 @@ class HealthProvider extends ChangeNotifier {
   final HealthRepository repository;
   final bool personalImportEnabled;
   final HealthImportService Function(HealthRepository) _importServiceFactory;
+  final HealthKitClient? healthKitClient;
+  HealthKitRefreshService? _healthKitRefresh;
+  HealthKitRefreshProgress? healthKitProgress;
+  bool get healthKitSupported =>
+      !kIsWeb &&
+      (healthKitClient != null || defaultTargetPlatform == TargetPlatform.iOS);
+  String get healthKitProgressLabel {
+    final value = healthKitProgress;
+    if (value == null) return '';
+    return '${value.metric.name} · ${value.pages} pages · ${value.samples} samples · ${value.deletions} deletions';
+  }
+
   String? _pendingImportPath;
   String? _pendingRestorePath;
   bool get hasPendingImport => _pendingImportPath != null;
@@ -63,12 +80,16 @@ class HealthProvider extends ChangeNotifier {
     _notify();
     try {
       await action();
+    } on HealthKitException catch (failure) {
+      if (unlocked && !_lockRequested && !_disposed) error = failure.message;
     } catch (_) {
       error =
           'The local operation could not be completed. Your source file has not been changed. Retry after reopening the vault.';
     } finally {
       progress = null;
       _importer = null;
+      healthKitProgress = null;
+      _healthKitRefresh = null;
       if (_lockRequested || _disposed) {
         await _close();
         _lockRequested = false;
@@ -127,10 +148,12 @@ class HealthProvider extends ChangeNotifier {
     withheldDays = [];
     cacheHitDays = 0;
     progress = null;
+    healthKitProgress = null;
     error = null;
     resultMessage = null;
     _lockRequested = true;
     _importer?.cancel();
+    cancelHealthKitRefresh();
     _notify();
     if (!busy) {
       busy = true;
@@ -274,6 +297,91 @@ class HealthProvider extends ChangeNotifier {
   }
 
   void cancelImport() => _importer?.cancel();
+  Future<void> refreshHealthKit(
+    Iterable<HealthMetric> selectedMetrics, {
+    bool requestAuthorization = false,
+  }) {
+    final metrics = selectedMetrics.toSet().toList();
+    return _run(() async {
+      if (!personalImportEnabled) {
+        error = 'Apple Health refresh is awaiting native device validation.';
+        return;
+      }
+      final store = repository;
+      if (!healthKitSupported || store is! HealthKitRepository) {
+        error = 'Apple Health refresh is available in the iPhone app.';
+        return;
+      }
+      if (metrics.isEmpty) {
+        error = 'Choose at least one health category.';
+        return;
+      }
+      _healthKitRefresh = HealthKitRefreshService(
+        store as HealthKitRepository,
+        client: healthKitClient,
+      );
+      healthKitProgress = HealthKitRefreshProgress(
+        metric: metrics.first,
+        pages: 0,
+        samples: 0,
+        deletions: 0,
+      );
+      _notify();
+      late final HealthKitRefreshResult result;
+      var refreshFailed = false;
+      try {
+        result = await _healthKitRefresh!.refresh(
+          metrics,
+          requestAuthorization: requestAuthorization,
+          onProgress: (value) {
+            if (unlocked && !_lockRequested && !_disposed) {
+              healthKitProgress = value;
+              _notify();
+            }
+          },
+        );
+      } catch (_) {
+        refreshFailed = true;
+        rethrow;
+      } finally {
+        // Earlier pages remain committed after cancellation or a later error.
+        // Reload their projections without replacing the original safe error.
+        if (unlocked && !_lockRequested && !_disposed) {
+          try {
+            await _refresh();
+          } catch (_) {
+            if (!refreshFailed) rethrow;
+          }
+        }
+      }
+      if (unlocked && !_lockRequested && !_disposed) {
+        resultMessage =
+            'Refresh completed: ${result.samples} samples, ${result.deletions} deletions. Empty results do not confirm read permission.';
+      }
+    });
+  }
+
+  void cancelHealthKitRefresh() {
+    final service = _healthKitRefresh;
+    if (service != null) {
+      unawaited(service.cancel().catchError((Object _) {}));
+    }
+  }
+
+  Future<void> clearHealthKitData() => _run(() async {
+    if (!personalImportEnabled) {
+      error = 'Apple Health refresh is awaiting native device validation.';
+      return;
+    }
+    final store = repository;
+    if (store is! HealthKitRepository) return;
+    await (store as HealthKitRepository).deleteHealthKitData();
+    await _refresh();
+    if (unlocked && !_lockRequested && !_disposed) {
+      resultMessage =
+          'Fetched HealthKit data removed locally. Apple Health was not changed.';
+    }
+  });
   Future<void> deleteImport(String id) => _run(() async {
     await repository.deleteImport(id);
     await _refresh();

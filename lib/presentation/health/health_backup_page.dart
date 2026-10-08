@@ -44,7 +44,7 @@ class _HealthBackupPageState extends State<HealthBackupPage> {
           builder: (context) => AlertDialog(
             title: const Text('Replace the entire local vault?'),
             content: const Text(
-              'Restore replaces local observations, import history and notes after validation. Back up your current vault first. Videos and cloud records are not restored.',
+              'Restore replaces local observations, import history and notes after validation, then resets HealthKit refresh cursors for this device. The first refresh rebuilds fetched history for each selected type; empty read access can produce empty history. Choose access before refreshing. Back up your current vault first. Videos and cloud records are not restored.',
             ),
             actions: [
               TextButton(
@@ -137,11 +137,11 @@ class _HealthBackupPageState extends State<HealthBackupPage> {
         padding: const EdgeInsets.all(24),
         children: [
           const Text(
-            'Backs up only local Health observations, source provenance, import lineage and notes. Training videos, InBody cloud reports and checkpoint cloud metadata are excluded. They will not be restored.',
+            'Backs up local Health observations, source provenance, import lineage, HealthKit refresh cursors and notes. Training videos, InBody cloud reports and checkpoint cloud metadata are excluded. They will not be restored.',
           ),
           const SizedBox(height: 12),
           const Text(
-            'Choose a private destination. Keep the passphrase separately: the app cannot recover a forgotten passphrase. Uninstalling can erase the device vault.',
+            'After encryption, choose a private destination in Files, including your own iCloud Drive. Only the encrypted backup is exported; nothing is uploaded automatically. Keep the passphrase separately: the app cannot recover it. Uninstalling can erase the device vault.',
           ),
           TextField(
             controller: _password,

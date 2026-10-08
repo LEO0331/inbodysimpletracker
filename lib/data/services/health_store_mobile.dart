@@ -16,6 +16,9 @@ import 'health_daily_cache.dart';
 import 'health_summary_cache.dart';
 export 'health_daily_cache.dart' show healthCacheSchema;
 import 'health_repository.dart';
+import 'healthkit_repository.dart';
+import 'healthkit_store_schema.dart';
+export 'healthkit_store_schema.dart' show healthKitSchema;
 import 'health_store_web.dart';
 
 HealthRepository createHealthRepository() =>
@@ -25,7 +28,7 @@ HealthRepository createHealthRepository() =>
 
 /// One independent, device-local profile. No cloud identifiers or network clients.
 class EncryptedHealthRepository
-    implements HealthRepository, HealthSummaryCache {
+    implements HealthRepository, HealthSummaryCache, HealthKitRepository {
   EncryptedHealthRepository();
 
   /// Injected test database; production always opens and verifies SQLCipher.
@@ -93,7 +96,7 @@ class EncryptedHealthRepository
       opened = await openDatabase(
         path,
         password: key,
-        version: 2,
+        version: 3,
         singleInstance: false,
         onConfigure: (db) async {
           final cipher = await db.rawQuery('PRAGMA cipher_version');
@@ -107,13 +110,22 @@ class EncryptedHealthRepository
           await db.execute('PRAGMA secure_delete = ON');
         },
         onCreate: (db, version) async {
-          for (final statement in [...healthSchema, ...healthCacheSchema]) {
+          for (final statement in [
+            ...healthSchema,
+            ...healthCacheSchema,
+            ...healthKitSchema,
+          ]) {
             await db.execute(statement);
           }
         },
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) {
             for (final statement in healthCacheSchema) {
+              await db.execute(statement);
+            }
+          }
+          if (oldVersion < 3) {
+            for (final statement in healthKitSchema) {
               await db.execute(statement);
             }
           }
@@ -143,6 +155,136 @@ class EncryptedHealthRepository
     _database = null;
     await db?.close();
   }
+
+  @override
+  Future<String?> readHealthKitAnchor(HealthMetric metric) async {
+    final rows = await _db.query(
+      'healthkit_cursors',
+      columns: ['anchor'],
+      where: 'metric = ?',
+      whereArgs: [metric.name],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.single['anchor'] as String;
+  }
+
+  @override
+  Future<void> applyHealthKitPage({
+    required HealthMetric metric,
+    required String? expectedAnchor,
+    required String nextAnchor,
+    required List<HealthObservation> samples,
+    required List<String> deletedIds,
+    bool hasMore = false,
+  }) async {
+    validateHealthKitAnchor(nextAnchor);
+    if (expectedAnchor != null) validateHealthKitAnchor(expectedAnchor);
+    if (samples.length + deletedIds.length > 1000) {
+      throw const FormatException('HealthKit page exceeds 1000 changes.');
+    }
+    final ids = <String>{};
+    for (final sample in samples) {
+      validateHealthRow('observations', sample.toMap());
+      validateHealthKitObservation(sample, metric);
+      if (!ids.add(sample.id)) {
+        throw const FormatException('Duplicate HealthKit change.');
+      }
+    }
+    for (final id in deletedIds) {
+      validateHealthKitId(id, metric);
+      if (!ids.add(id)) {
+        throw const FormatException('Duplicate HealthKit change.');
+      }
+    }
+    await _db.transaction<void>((txn) async {
+      final cursors = await txn.query(
+        'healthkit_cursors',
+        columns: ['anchor'],
+        where: 'metric = ?',
+        whereArgs: [metric.name],
+        limit: 1,
+      );
+      final current = cursors.isEmpty
+          ? null
+          : cursors.single['anchor'] as String;
+      if (current != expectedAnchor) {
+        throw StateError('HealthKit refresh is stale.');
+      }
+      final batchId = healthKitBatchId(metric);
+      if (current == null) {
+        // A restored anchor cannot address this device's HealthKit store.
+        // Replace only this metric's previous live history on its first page.
+        await txn.delete('batches', where: 'id = ?', whereArgs: [batchId]);
+        await _removeOrphans(txn);
+      }
+      final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+      await txn.insert('batches', {
+        'id': batchId,
+        'created_ms': now,
+        'status': hasMore ? 'importing' : 'ready',
+        'record_count': 0,
+        'skipped_count': 0,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      for (final sample in samples) {
+        // In-place updates preserve memberships; SQL REPLACE deletes old rows.
+        await txn.insert(
+          'observations',
+          sample.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+        await txn.update(
+          'observations',
+          sample.toMap(),
+          where: 'id = ?',
+          whereArgs: [sample.id],
+        );
+        await txn.insert('memberships', {
+          'batch_id': batchId,
+          'observation_id': sample.id,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+      for (final id in deletedIds) {
+        await txn.delete(
+          'memberships',
+          where: 'batch_id = ? AND observation_id = ?',
+          whereArgs: [batchId, id],
+        );
+        await txn.execute(
+          'DELETE FROM observations WHERE id = ? AND NOT EXISTS '
+          '(SELECT 1 FROM memberships WHERE observation_id = observations.id)',
+          [id],
+        );
+      }
+      await txn.execute(
+        'UPDATE batches SET status = ?, record_count = '
+        '(SELECT COUNT(*) FROM memberships WHERE batch_id = ?) WHERE id = ?',
+        [hasMore ? 'importing' : 'ready', batchId, batchId],
+      );
+      await txn.insert('healthkit_cursors', {
+        'metric': metric.name,
+        'anchor': nextAnchor,
+        'batch_id': batchId,
+        'updated_ms': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      // The final empty page can reveal committed staged records; invalidate
+      // when visibility changes as well as when samples change.
+      await _invalidateSummaries(txn);
+    });
+  }
+
+  @override
+  Future<void> deleteHealthKitData() => _db.transaction<void>((txn) async {
+    await txn.delete('healthkit_cursors');
+    for (final metric in HealthMetric.values) {
+      await txn.delete(
+        'batches',
+        where: 'id = ?',
+        whereArgs: [healthKitBatchId(metric)],
+      );
+    }
+    await _removeOrphans(txn);
+    await _invalidateSummaries(txn);
+  });
 
   @override
   Future<String> beginImport() async {
@@ -184,6 +326,9 @@ class EncryptedHealthRepository
       final batch = txn.batch();
       final memberships = txn.batch();
       for (final observation in observations) {
+        if (observation.id.startsWith('hk:')) {
+          throw const FormatException('Reserved HealthKit sample namespace.');
+        }
         final row = observation.toMap();
         validateHealthRow('observations', row);
         batch.insert(
@@ -237,7 +382,11 @@ class EncryptedHealthRepository
 
   static Future<void> _recoverInterruptedImports(Database db) =>
       db.transaction<void>((txn) async {
-        await txn.delete('batches', where: 'status != ?', whereArgs: ['ready']);
+        await txn.delete(
+          'batches',
+          where: "status != ? AND id NOT GLOB 'healthkit_live:*'",
+          whereArgs: ['ready'],
+        );
         await _removeOrphans(txn);
       });
 
@@ -594,14 +743,16 @@ class EncryptedHealthRepository
             'observations',
             'memberships',
             'notes',
+            'healthkit_cursors',
           ]) {
             var lastRowId = 0;
             final visibility = switch (table) {
-              'batches' => " WHERE status = 'ready'",
+              'batches' =>
+                " WHERE (status = 'ready' OR id GLOB 'healthkit_live:*')",
               'observations' =>
-                " WHERE EXISTS (SELECT 1 FROM memberships m JOIN batches b ON b.id = m.batch_id WHERE m.observation_id = observations.id AND b.status = 'ready')",
+                " WHERE EXISTS (SELECT 1 FROM memberships m JOIN batches b ON b.id = m.batch_id WHERE m.observation_id = observations.id AND (b.status = 'ready' OR b.id GLOB 'healthkit_live:*'))",
               'memberships' =>
-                " WHERE EXISTS (SELECT 1 FROM batches b WHERE b.id = memberships.batch_id AND b.status = 'ready')",
+                " WHERE EXISTS (SELECT 1 FROM batches b WHERE b.id = memberships.batch_id AND (b.status = 'ready' OR b.id GLOB 'healthkit_live:*'))",
               _ => '',
             };
             while (!canceled) {
@@ -651,6 +802,7 @@ class EncryptedHealthRepository
   @override
   Future<void> restoreChunks(Stream<List<Map<String, Object?>>> chunks) async {
     await _db.transaction<void>((txn) async {
+      await txn.delete('healthkit_cursors');
       await txn.delete('memberships');
       await txn.delete('observations');
       await txn.delete('batches');
@@ -682,6 +834,10 @@ class EncryptedHealthRepository
       if (mismatch.isNotEmpty || orphan.isNotEmpty) {
         throw const FormatException('Invalid backup lineage.');
       }
+      await validateHealthKitLineage(txn);
+      // Anchors are opaque and tied to the originating HealthKit store.
+      // Validate backup cursors/FKs but resume from a fresh query after restore.
+      await txn.delete('healthkit_cursors');
       await _invalidateSummaries(txn);
     });
   }
@@ -700,6 +856,10 @@ const healthSchema = <String>[
 
 /// Strict envelope validation before restored data crosses the live-vault boundary.
 void validateHealthRow(String table, Map<String, Object?> row) {
+  if (table == 'healthkit_cursors') {
+    validateHealthKitCursor(row);
+    return;
+  }
   final required = switch (table) {
     'batches' => {
       'id',
@@ -752,10 +912,21 @@ void validateHealthRow(String table, Map<String, Object?> row) {
       throw const FormatException('Invalid observation.');
     }
   } else if (table == 'batches') {
+    if (row['id'] is String &&
+        (row['id'] as String).startsWith('healthkit_live:') &&
+        !HealthMetric.values.any(
+          (metric) => row['id'] == healthKitBatchId(metric),
+        )) {
+      throw const FormatException('Invalid HealthKit batch.');
+    }
     if (row['id'] is! String ||
         (row['id'] as String).isEmpty ||
         row['created_ms'] is! int ||
-        row['status'] != 'ready' ||
+        (row['status'] != 'ready' &&
+            !(row['status'] == 'importing' &&
+                HealthMetric.values.any(
+                  (metric) => row['id'] == healthKitBatchId(metric),
+                ))) ||
         row['record_count'] is! int ||
         (row['record_count'] as int) < 0 ||
         row['skipped_count'] is! int ||

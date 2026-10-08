@@ -4,6 +4,7 @@ import '../../data/models/health_observation.dart';
 import '../../logic/providers/health_provider.dart';
 import 'health_import_page.dart';
 import 'health_backup_page.dart';
+import 'healthkit_page.dart';
 
 class HealthTimelinePage extends StatelessWidget {
   const HealthTimelinePage({super.key, this.cloudContextBuilder});
@@ -111,6 +112,14 @@ class HealthTimelinePage extends StatelessWidget {
                     : () => _navigate(context, const HealthBackupPage()),
                 child: const Text('Encrypted backup'),
               ),
+              if (vault.healthKitSupported)
+                OutlinedButton(
+                  onPressed: vault.busy
+                      ? null
+                      : () =>
+                            _navigate(context, const AppleHealthRefreshPage()),
+                  child: const Text('Apple Health refresh'),
+                ),
               OutlinedButton(
                 onPressed: vault.busy || !vault.personalImportEnabled
                     ? null
@@ -122,7 +131,7 @@ class HealthTimelinePage extends StatelessWidget {
           if (cloudContextBuilder != null) cloudContextBuilder!(context),
           if (!vault.personalImportEnabled)
             const Text(
-              'Personal imports, restore and notes are awaiting native device validation.',
+              'Personal imports, Apple Health refresh, restore and notes are awaiting native device validation.',
             ),
           Row(
             children: [

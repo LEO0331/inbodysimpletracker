@@ -8,6 +8,7 @@ import 'package:cryptography/cryptography.dart';
 
 import 'health_backup_exception.dart';
 import 'health_repository.dart';
+import 'healthkit_store_schema.dart';
 
 /// Portable backup of the private Health vault and notes only.
 /// Videos and Firestore records are deliberately outside this format.
@@ -30,7 +31,7 @@ class HealthBackupService {
       final prefix = _random(8);
       final header = jsonEncode({
         'format': 'private-health',
-        'version': 1,
+        'version': 2,
         'kdf': 'PBKDF2-HMAC-SHA256',
         'iterations': _iterations,
         'salt': base64Encode(salt),
@@ -85,6 +86,7 @@ class HealthBackupService {
         var buffered = <Map<String, Object?>>[];
         var bufferedBytes = framingBytes;
         for (final row in rows) {
+          _validateRow(row, 2);
           final rowBytes = utf8.encode(jsonEncode(row)).length;
           if (rowBytes + framingBytes > plainLimit) {
             throw const HealthBackupException(
@@ -143,13 +145,19 @@ class HealthBackupService {
       // abort the repository transaction and preserve the previous vault.
       final first = await _readHeader(file);
       final key = await _derive(passphrase, first.salt);
-      await for (final _ in _decrypt(file, first.header, first.prefix, key)) {}
+      await for (final _ in _decrypt(
+        file,
+        first.header,
+        first.prefix,
+        key,
+        first.version,
+      )) {}
       final nextStat = await file.stat();
       if (nextStat.size != stat.size || nextStat.modified != stat.modified) {
         throw const FormatException('Changed file');
       }
       await _repository.restoreChunks(
-        _decrypt(file, first.header, first.prefix, key),
+        _decrypt(file, first.header, first.prefix, key, first.version),
       );
     } catch (_) {
       throw const HealthBackupException(
@@ -158,16 +166,15 @@ class HealthBackupService {
     }
   }
 
-  Future<({String header, List<int> salt, List<int> prefix})> _readHeader(
-    File file,
-  ) async {
+  Future<({String header, List<int> salt, List<int> prefix, int version})>
+  _readHeader(File file) async {
     final lines = _lines(file);
     final header = await lines.first;
     if (header.length > 1024) throw const FormatException('Header size');
     final map = jsonDecode(header) as Map<String, dynamic>;
     if (map.length != 6 ||
         map['format'] != 'private-health' ||
-        map['version'] != 1 ||
+        (map['version'] != 1 && map['version'] != 2) ||
         map['kdf'] != 'PBKDF2-HMAC-SHA256' ||
         map['iterations'] != _iterations) {
       throw const FormatException('Unsupported format');
@@ -177,7 +184,12 @@ class HealthBackupService {
     if (salt.length != 16 || prefix.length != 8) {
       throw const FormatException('Invalid header');
     }
-    return (header: header, salt: salt, prefix: prefix);
+    return (
+      header: header,
+      salt: salt,
+      prefix: prefix,
+      version: map['version'] as int,
+    );
   }
 
   Stream<List<Map<String, Object?>>> _decrypt(
@@ -185,6 +197,7 @@ class HealthBackupService {
     String header,
     List<int> prefix,
     SecretKey key,
+    int version,
   ) async* {
     var lineIndex = 0;
     var index = 0;
@@ -212,6 +225,9 @@ class HealthBackupService {
         secretKey: key,
         aad: utf8.encode('$header\n$index'),
       );
+      if (plain.length > _maxLine ~/ 2) {
+        throw const FormatException('Chunk size');
+      }
       final payload = jsonDecode(utf8.decode(plain)) as Map<String, dynamic>;
       if (payload['kind'] == 'end') {
         if (payload.length != 2 || payload['count'] != index) {
@@ -221,13 +237,30 @@ class HealthBackupService {
       } else if (payload['kind'] == 'data' && payload.length == 2) {
         final rows = payload['rows'] as List<dynamic>;
         if (rows.length > 500) throw const FormatException('Chunk size');
-        yield rows.map((row) => Map<String, Object?>.from(row as Map)).toList();
+        final decoded = rows
+            .map((row) => Map<String, Object?>.from(row as Map))
+            .toList();
+        for (final row in decoded) {
+          _validateRow(row, version);
+        }
+        yield decoded;
       } else {
         throw const FormatException('Invalid payload');
       }
       index++;
     }
     if (!ended) throw const FormatException('Truncated backup');
+  }
+
+  void _validateRow(Map<String, Object?> row, int version) {
+    final table = row['table'];
+    if (!{'batches', 'observations', 'memberships', 'notes'}.contains(table)) {
+      if (version != 2 || table != 'healthkit_cursors') {
+        throw const FormatException('Unsupported backup table.');
+      }
+      final cursor = Map<String, Object?>.from(row)..remove('table');
+      validateHealthKitCursor(cursor);
+    }
   }
 
   // Bound bytes before UTF-8 decoding/JSON parsing. LineSplitter alone retains
