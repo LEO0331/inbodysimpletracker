@@ -10,6 +10,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 
 import '../models/health_observation.dart';
+import '../models/health_summary_window.dart';
+import '../../core/utils/health_aggregation.dart';
+import 'health_daily_cache.dart';
+import 'health_summary_cache.dart';
+export 'health_daily_cache.dart' show healthCacheSchema;
 import 'health_repository.dart';
 import 'health_store_web.dart';
 
@@ -19,7 +24,8 @@ HealthRepository createHealthRepository() =>
     : UnsupportedHealthRepository();
 
 /// One independent, device-local profile. No cloud identifiers or network clients.
-class EncryptedHealthRepository implements HealthRepository {
+class EncryptedHealthRepository
+    implements HealthRepository, HealthSummaryCache {
   EncryptedHealthRepository();
 
   /// Injected test database; production always opens and verifies SQLCipher.
@@ -87,7 +93,7 @@ class EncryptedHealthRepository implements HealthRepository {
       opened = await openDatabase(
         path,
         password: key,
-        version: 1,
+        version: 2,
         singleInstance: false,
         onConfigure: (db) async {
           final cipher = await db.rawQuery('PRAGMA cipher_version');
@@ -101,8 +107,15 @@ class EncryptedHealthRepository implements HealthRepository {
           await db.execute('PRAGMA secure_delete = ON');
         },
         onCreate: (db, version) async {
-          for (final statement in healthSchema) {
+          for (final statement in [...healthSchema, ...healthCacheSchema]) {
             await db.execute(statement);
+          }
+        },
+        onUpgrade: (db, oldVersion, newVersion) async {
+          if (oldVersion < 2) {
+            for (final statement in healthCacheSchema) {
+              await db.execute(statement);
+            }
           }
         },
       );
@@ -163,7 +176,7 @@ class EncryptedHealthRepository implements HealthRepository {
     if (observations.length > 2000) {
       throw ArgumentError('Import batch exceeds 2000 rows.');
     }
-    return _db.transaction((txn) async {
+    return _db.transaction<int>((txn) async {
       await _requireImport(txn, batchId);
       final before = Sqflite.firstIntValue(
         await txn.rawQuery('SELECT total_changes()'),
@@ -195,7 +208,7 @@ class EncryptedHealthRepository implements HealthRepository {
   @override
   Future<void> finishImport(String batchId, {required int skippedCount}) async {
     if (skippedCount < 0) throw ArgumentError('Invalid skipped count.');
-    await _db.transaction((txn) async {
+    await _db.transaction<void>((txn) async {
       await _requireImport(txn, batchId);
       final count = Sqflite.firstIntValue(
         await txn.rawQuery(
@@ -213,6 +226,7 @@ class EncryptedHealthRepository implements HealthRepository {
         where: 'id = ?',
         whereArgs: [batchId],
       );
+      await _invalidateSummaries(txn);
     });
   }
 
@@ -233,13 +247,23 @@ class EncryptedHealthRepository implements HealthRepository {
   @override
   Future<void> deleteImport(String batchId) => _deleteBatch(batchId);
   Future<void> _deleteBatch(String id, {bool importingOnly = false}) =>
-      _db.transaction((txn) async {
+      _db.transaction<void>((txn) async {
+        final ready = importingOnly
+            ? <Map<String, Object?>>[]
+            : await txn.query(
+                'batches',
+                columns: ['id'],
+                where: 'id = ? AND status = ?',
+                whereArgs: [id, 'ready'],
+                limit: 1,
+              );
         await txn.delete(
           'batches',
           where: importingOnly ? 'id = ? AND status = ?' : 'id = ?',
           whereArgs: importingOnly ? [id, 'importing'] : [id],
         );
         await _removeOrphans(txn);
+        if (ready.isNotEmpty) await _invalidateSummaries(txn);
       });
 
   @override
@@ -274,13 +298,205 @@ class EncryptedHealthRepository implements HealthRepository {
       (newer.sync_version > o.sync_version OR
         (newer.sync_version = o.sync_version AND newer.id > o.id)))''';
 
+  static Future<void> _invalidateSummaries(DatabaseExecutor executor) async {
+    await executor.execute(
+      'UPDATE health_cache_state SET generation = generation + 1 WHERE id = 1',
+    );
+    await executor.delete('health_daily_cache');
+    await executor.delete('health_source_cache');
+  }
+
+  @override
+  Future<HealthSummaryWindow> queryDailySummaries({
+    required DateTime from,
+    required DateTime to,
+    required HealthMetric metric,
+    String? source,
+    int? offsetMinutes,
+  }) async {
+    bool midnight(DateTime date) =>
+        date.isUtc &&
+        date.hour == 0 &&
+        date.minute == 0 &&
+        date.second == 0 &&
+        date.millisecond == 0 &&
+        date.microsecond == 0;
+    if (!midnight(from) ||
+        !midnight(to) ||
+        !from.isBefore(to) ||
+        to.difference(from).inDays > 366 ||
+        (offsetMinutes != null &&
+            (offsetMinutes < -720 || offsetMinutes > 840))) {
+      throw ArgumentError('Invalid daily summary bounds.');
+    }
+    return _db.transaction<HealthSummaryWindow>((txn) async {
+      final generation =
+          (await txn.query(
+                'health_cache_state',
+                where: 'id = 1',
+              )).single['generation']
+              as int;
+      final summaries = <HealthDailySummary>[];
+      final limitedDays = <DateTime>[];
+      final incompleteDays = <DateTime>[];
+      var hits = 0;
+      for (
+        var day = from;
+        day.isBefore(to);
+        day = day.add(const Duration(days: 1))
+      ) {
+        final key = jsonEncode([
+          metric.name,
+          source,
+          day.millisecondsSinceEpoch,
+          offsetMinutes,
+          healthCachePolicyVersion,
+        ]);
+        final rows = await txn.query(
+          'health_daily_cache',
+          where: 'cache_key = ? AND generation = ?',
+          whereArgs: [key, generation],
+          limit: 1,
+        );
+        CachedHealthDay? cached;
+        if (rows.isNotEmpty) {
+          try {
+            cached = CachedHealthDay.decode(
+              rows.single['payload'] as String,
+              day,
+              metric,
+              source,
+            );
+            hits++;
+          } catch (_) {
+            await txn.delete(
+              'health_daily_cache',
+              where: 'cache_key = ?',
+              whereArgs: [key],
+            );
+          }
+        }
+        if (cached == null) {
+          final sleep = metric == HealthMetric.sleep;
+          // Original record offsets may differ. Sleep needs nearby complete episodes.
+          final lower = day.subtract(Duration(hours: sleep ? 62 : 24));
+          final upper = day.add(Duration(hours: sleep ? 38 : 48));
+          final records = <HealthObservation>[];
+          var cursor = 0;
+          var limited = false;
+          var incomplete = false;
+          while (true) {
+            final args = <Object?>[
+              lower.millisecondsSinceEpoch,
+              upper.millisecondsSinceEpoch,
+              metric.name,
+            ];
+            final sourceSql = source == null ? '' : ' AND o.source = ?';
+            if (source != null) args.add(source);
+            args.addAll([1000, cursor]);
+            final page = await txn.rawQuery(
+              'SELECT o.* FROM observations o WHERE $_visible AND o.end_ms >= ? '
+              "AND (CASE WHEN o.metric = 'sleep' THEN o.start_ms ELSE o.end_ms END) < ? "
+              'AND o.metric = ?$sourceSql ORDER BY o.end_ms, o.id LIMIT ? OFFSET ?',
+              args,
+            );
+            for (final row in page) {
+              final record = HealthObservation.fromMap(row);
+              if (!sleep) {
+                final local = record.end.toUtc().add(
+                  Duration(minutes: offsetMinutes ?? record.offsetMinutes),
+                );
+                if (DateTime.utc(local.year, local.month, local.day) != day) {
+                  continue;
+                }
+              }
+              records.add(record);
+              if (sleep &&
+                  (!record.start.isAfter(lower) ||
+                      !record.end.isBefore(upper))) {
+                incomplete = true;
+              }
+              if (records.length > 5000) {
+                limited = true;
+                break;
+              }
+            }
+            if (limited || page.length < 1000) break;
+            cursor += page.length;
+          }
+          cached = await aggregateCachedHealthDay(
+            records,
+            day,
+            offsetMinutes,
+            limited: limited,
+            incomplete: incomplete,
+          );
+          await txn.insert('health_daily_cache', {
+            'cache_key': key,
+            'generation': generation,
+            'payload': cached.encode(),
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+        summaries.addAll(cached.summaries);
+        if (cached.limited) limitedDays.add(day);
+        if (cached.incomplete) incompleteDays.add(day);
+      }
+      return HealthSummaryWindow(
+        summaries: summaries,
+        limitedDays: limitedDays,
+        incompleteDays: incompleteDays,
+        cacheHitDays: hits,
+      );
+    });
+  }
+
   @override
   Future<List<String>> listSources(
     HealthMetric metric,
-  ) async => (await _db.rawQuery(
-    'SELECT DISTINCT o.source FROM observations o WHERE $_visible AND o.metric = ? ORDER BY o.source',
-    [metric.name],
-  )).map((row) => row['source'] as String).toList();
+  ) => _db.transaction<List<String>>((txn) async {
+    final generation =
+        (await txn.query(
+              'health_cache_state',
+              where: 'id = 1',
+            )).single['generation']
+            as int;
+    final cached = await txn.query(
+      'health_source_cache',
+      where: 'metric = ? AND generation = ?',
+      whereArgs: [metric.name, generation],
+      limit: 1,
+    );
+    if (cached.isNotEmpty) {
+      try {
+        final payload = jsonDecode(cached.single['payload'] as String);
+        if (payload is! List ||
+            payload.any((item) => item is! String || item.isEmpty)) {
+          throw const FormatException('Invalid cached sources.');
+        }
+        final sources = payload.cast<String>();
+        if (sources.toSet().length != sources.length) {
+          throw const FormatException('Invalid cached sources.');
+        }
+        return sources..sort();
+      } catch (_) {
+        await txn.delete(
+          'health_source_cache',
+          where: 'metric = ?',
+          whereArgs: [metric.name],
+        );
+      }
+    }
+    final sources = (await txn.rawQuery(
+      'SELECT DISTINCT o.source FROM observations o WHERE $_visible AND o.metric = ? ORDER BY o.source',
+      [metric.name],
+    )).map((row) => row['source'] as String).toList();
+    await txn.insert('health_source_cache', {
+      'metric': metric.name,
+      'generation': generation,
+      'payload': jsonEncode(sources),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    return sources;
+  });
 
   @override
   Future<List<HealthObservation>> queryObservations({
@@ -434,7 +650,7 @@ class EncryptedHealthRepository implements HealthRepository {
 
   @override
   Future<void> restoreChunks(Stream<List<Map<String, Object?>>> chunks) async {
-    await _db.transaction((txn) async {
+    await _db.transaction<void>((txn) async {
       await txn.delete('memberships');
       await txn.delete('observations');
       await txn.delete('batches');
@@ -466,6 +682,7 @@ class EncryptedHealthRepository implements HealthRepository {
       if (mismatch.isNotEmpty || orphan.isNotEmpty) {
         throw const FormatException('Invalid backup lineage.');
       }
+      await _invalidateSummaries(txn);
     });
   }
 }

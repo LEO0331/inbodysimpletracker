@@ -5,6 +5,7 @@ import '../../data/services/health_repository.dart';
 import '../../data/services/health_import_service.dart';
 import '../../data/services/health_backup_service.dart';
 import '../../data/services/health_store.dart';
+import '../../data/services/health_summary_cache.dart';
 
 /// A device-local vault. Never depends on a cloud account or cloud services.
 class HealthProvider extends ChangeNotifier {
@@ -31,6 +32,8 @@ class HealthProvider extends ChangeNotifier {
   bool busy = false;
   bool truncated = false;
   bool incompleteSleepContext = false;
+  List<DateTime> withheldDays = [];
+  int cacheHitDays = 0;
   bool _disposed = false;
   bool _lockRequested = false;
   String? error;
@@ -121,6 +124,8 @@ class HealthProvider extends ChangeNotifier {
     sources = [];
     truncated = false;
     incompleteSleepContext = false;
+    withheldDays = [];
+    cacheHitDays = 0;
     progress = null;
     error = null;
     resultMessage = null;
@@ -153,6 +158,34 @@ class HealthProvider extends ChangeNotifier {
     final availableSources = await repository.listSources(metric);
     if (!unlocked || _lockRequested || _disposed) return;
     if (source != null && !availableSources.contains(source)) source = null;
+    final cache = repository;
+    if (cache is HealthSummaryCache) {
+      final result = await (cache as HealthSummaryCache).queryDailySummaries(
+        from: day,
+        to: day.add(const Duration(days: 7)),
+        metric: metric,
+        source: source,
+        offsetMinutes: offsetMinutes,
+      );
+      final batches = await repository.listImports();
+      final savedNotes = await repository.listNotes(
+        day,
+        day.add(const Duration(days: 7)),
+      );
+      if (!unlocked || _lockRequested || _disposed) return;
+      summaries = result.summaries;
+      truncated = result.limitedDays.isNotEmpty;
+      incompleteSleepContext = result.incompleteDays.isNotEmpty;
+      withheldDays = <DateTime>{
+        ...result.limitedDays,
+        ...result.incompleteDays,
+      }.toList()..sort();
+      cacheHitDays = result.cacheHitDays;
+      imports = batches;
+      notes = savedNotes;
+      sources = availableSources;
+      return;
+    }
     final queryFrom = day.subtract(
       Duration(days: metric == HealthMetric.sleep ? 2 : 0, hours: 14),
     );
@@ -173,6 +206,10 @@ class HealthProvider extends ChangeNotifier {
     incompleteSleepContext =
         metric == HealthMetric.sleep &&
         rows.any((row) => !row.start.isAfter(queryFrom));
+    withheldDays = truncated || incompleteSleepContext
+        ? List.generate(7, (index) => day.add(Duration(days: index)))
+        : [];
+    cacheHitDays = 0;
     summaries = truncated || incompleteSleepContext
         ? []
         : computeDailyHealthSummaries(rows, offsetMinutes: offsetMinutes)

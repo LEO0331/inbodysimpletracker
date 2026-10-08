@@ -16,12 +16,13 @@ The private planning notes stay in ignored `.omx/plans/`.
 3. **Import and review:** bounded XML/ZIP parsing with worker backpressure,
    cancellation and defensive archive/entity guards; known unit conversions,
    source-separated summaries, missing-data gaps and overlap warnings. Weekly
-   raw queries are capped rather than publishing partial statistics.
+   daily summaries and source inventories are cached inside SQLCipher. Warm views
+   avoid raw-record scans; cold views page observations with per-day quality caps.
 4. **Personal context and portable recovery:** local notes, encrypted streaming
    backups, full authentication before transactional restore, and user-selected
    native Files export. Current backup scope is the local vault only.
-5. **Later scope:** direct read-only HealthKit updates, cached daily summary indexes
-   for larger histories, and full-recorder backups including opt-in videos and
+5. **Later scope:** direct read-only HealthKit updates, longer-range review views,
+   and optional full-recorder backups including opt-in videos and
    cloud-metadata snapshots. These are not implemented or represented as ready.
 
 The current native implementation uses `sqflite_sqlcipher` 3.4.x and
@@ -53,6 +54,13 @@ passed, with successful Web release and Android ARM64 Dart-bundle compilation.
 These counts include the existing InBody/checkpoint suite. Native integration,
 packaging, file-protection policy and physical-device measurements remain unrun;
 the personal-data release gate therefore stays disabled.
+
+Cache update verification: the full suite of 224 Flutter tests passed, plus the
+added timeline regression showing a valid date beside a withheld date. Cache tests
+cover warm reads without raw scans, source/offset separation, empty days, malformed
+payload recovery and atomic invalidation. Analysis and the Web build passed. The
+native integration fixture now checks v1-to-v2 migration and cache rebuilding;
+that physical-device check remains unrun.
 
 On a configured iOS/Android simulator or physical device, run:
 
@@ -91,7 +99,7 @@ database/WAL marker absence, wrong-key rejection and correct-key reopening.
 - Test Unicode/unknown units, multiple devices, same-source overlapping activity,
   source replacement, sleep stage conflicts, naps, midnight and offset/DST edges.
   Unknown/conflicting/incomplete data must not be presented as authoritative totals.
-- Prove portable encrypted backup/restore on another installation using synthetic
+- If using optional backups, prove portable encrypted backup/restore on another installation using synthetic
   observations/notes. Wrong passwords, altered or truncated files and malformed
   records must preserve the existing vault. Confirm excluded videos/cloud metadata
   are explicitly disclosed rather than expected to restore.
@@ -119,6 +127,20 @@ checks are performed. Source detail is retained in canonical sample identities
 and stored source/time/unit provenance; richer device/creation metadata browsing
 is future work. Original-offset/fixed-offset grouping is explicit and does not
 claim IANA timezone reconstruction or exact Apple Health source-priority totals.
-The weekly query cap may require narrowing the metric/source/date range until a
-daily aggregate cache is implemented. No diagnostic score or causal inference is
+The native cache uses schema v2; its migration adds only derived tables and retains
+canonical observations, import lineage, notes and protected keys. Caches are not
+included in backups and rebuild after restore. Per-day safety limits may require
+narrowing the selected source. No diagnostic score or causal inference is
 produced. Real clinical/CDA records are intentionally outside this iteration.
+
+## iCloud and refresh scope
+
+Apple Health's own iCloud sync is separate from this application. It can supply
+records for reimport when enabled, but it does not sync the local vault, cache,
+context notes, or training video copies. Backups remain optional and full-recorder
+backup work is deprioritized. Do not remove native encryption/protection gates.
+
+An optional future HealthKit refresh would request read access to selected types
+on iPhone, use an incremental anchor to receive new/deleted samples, and update the
+same encrypted local repository. It would avoid repeated XML export/import without
+introducing a GitHub or Firestore upload path. It is not implemented in this update.

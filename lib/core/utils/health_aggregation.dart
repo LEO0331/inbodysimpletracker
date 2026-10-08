@@ -151,6 +151,10 @@ List<HealthDailySummary> computeDailyHealthSummaries(
       samples.sort((a, b) => a.end.compareTo(b.end));
       value = samples.last.value;
     }
+    if (value != null && !value.isFinite) {
+      value = null;
+      conflict = true;
+    }
     result.add(
       HealthDailySummary(
         date: entry.key.$1,

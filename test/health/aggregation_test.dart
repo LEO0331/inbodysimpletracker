@@ -26,6 +26,27 @@ HealthObservation _sample(
   value: value,
 );
 void main() {
+  test('overflow cannot become a nonfinite cached total', () {
+    final start = DateTime.utc(2025, 1, 1, 10);
+    final result = computeDailyHealthSummaries([
+      _sample(
+        'a',
+        start,
+        start.add(const Duration(minutes: 1)),
+        metric: HealthMetric.steps,
+        value: 1e308,
+      ),
+      _sample(
+        'b',
+        start.add(const Duration(minutes: 2)),
+        start.add(const Duration(minutes: 3)),
+        metric: HealthMetric.steps,
+        value: 1e308,
+      ),
+    ]);
+    expect(result.single.value, isNull);
+    expect(result.single.hasConflict, isTrue);
+  });
   test('contiguous stages crossing midnight belong to the episode end day', () {
     final before = DateTime.utc(2025, 1, 1, 22);
     final summary = computeDailyHealthSummaries([

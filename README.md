@@ -20,9 +20,14 @@ Implemented capabilities:
   distance, activity energy, exercise time, resting heart rate, HRV SDNN and VO2 max.
   Clinical/CDA records, demographics and unsupported types are not imported.
 - Weekly source-separated summaries, original-record or explicitly chosen fixed
-  timezone offsets, coverage gaps, and conservative overlap handling. Partial
-  totals are withheld when the selected range exceeds 5,000 observations; sleep
-  uses bounded prior-episode context. XML totals are not presented as exact Apple
+  timezone offsets, coverage gaps, and conservative overlap handling.
+  Daily results are cached in the same encrypted vault, including empty dates and
+  quality warnings. Cache keys distinguish metric, source, date and offset policy;
+  imported/undone/restored observations invalidate derived results atomically.
+  Totals are withheld for dates exceeding 5,000 relevant observations; other dates
+  remain visible. Cache misses read bounded pages and aggregate off the UI thread;
+  warm views reuse summaries and source inventories without scanning observations.
+  Sleep uses bounded prior-episode context. XML totals are not presented as exact Apple
   Health statistics or medical/training advice.
 - Device-local context notes and an optional, explicitly opened read-only view of
   existing cloud-backed InBody/checkpoint metadata. Those legacy records retain
@@ -40,15 +45,18 @@ Implemented capabilities:
 **Personal imports, restores and new notes are disabled by default** pending native
 device validation. Do not use personal exports for development fixtures. Run the
 synthetic native checks in [the validation guide](docs/local-health-validation.md),
-complete backup/protection/lifecycle/performance verification, and only then build
+complete protection/lifecycle/performance verification (and recovery checks for
+any optional backups you use), and only then build
 with `--dart-define=HEALTH_VAULT_VERIFIED=true`. Direct HealthKit refresh and automatic
 cloud sync are not implemented. Web shows a native-only notice and retains all
 existing InBody functionality; it never uploads an export as a workaround.
 
 The native vault is excluded from iOS automatic backups and uses complete file
 protection. Android automatic backup/device transfer is disabled, including other
-app-local files; manual Health backups are required for portability. Uninstall or
-lost device keys can remove access to local data. Files export asks for a destination
+app-local files. Backups are optional: Apple Health records can be reimported from
+a fresh export, but app-specific notes are not stored in Apple Health or automatically
+synced to iCloud. Uninstall or lost device keys can remove access to local data.
+Files export asks for a destination
 and copies only an encrypted backup; the original selected XML/ZIP stays untouched.
 
 Public MQTT is no longer opened automatically. Legacy MQTT ingestion requires

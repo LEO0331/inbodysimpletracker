@@ -238,7 +238,7 @@ class HealthTimelinePage extends StatelessWidget {
           if (vault.error != null) Text(vault.error!),
           if (vault.truncated)
             const Text(
-              'This range contains more than 5,000 observations. Summaries are withheld to avoid displaying partial totals. Select one source or another date.',
+              'Some dates exceed the safe observation limit. Their totals are withheld; other dates remain available. Select one source to narrow the data.',
             ),
           if (vault.metric == HealthMetric.sleep)
             const Text(
@@ -246,40 +246,56 @@ class HealthTimelinePage extends StatelessWidget {
             ),
           if (vault.incompleteSleepContext)
             const Text(
-              'Sleep observations touch the beginning of the context range. Summaries are withheld because the episode may be incomplete.',
+              'Some sleep episodes have incomplete context. Totals for those dates are withheld.',
             ),
-          if (!vault.truncated && !vault.incompleteSleepContext)
-            for (var i = 0; i < 7; i++) ...[
-              const Divider(),
-              Text(
-                start.add(Duration(days: i)).toString().split(' ').first,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+          for (var i = 0; i < 7; i++) ...[
+            const Divider(),
+            Text(
+              start.add(Duration(days: i)).toString().split(' ').first,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            if (vault.withheldDays.contains(
+              DateTime.utc(
+                start.year,
+                start.month,
+                start.day,
+              ).add(Duration(days: i)),
+            ))
+              const Text(
+                'Summary withheld · incomplete or excessive observations',
               ),
-              if (!vault.summaries.any(
-                (s) =>
-                    s.date.year == start.add(Duration(days: i)).year &&
-                    s.date.month == start.add(Duration(days: i)).month &&
-                    s.date.day == start.add(Duration(days: i)).day,
-              ))
-                const Text('No recorded observations · coverage gap'),
-              for (final summary in vault.summaries.where(
-                (s) =>
-                    s.date.year == start.add(Duration(days: i)).year &&
-                    s.date.month == start.add(Duration(days: i)).month &&
-                    s.date.day == start.add(Duration(days: i)).day,
-              ))
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    summary.hasConflict && summary.value == null
-                        ? 'Conflicting intervals · total withheld'
-                        : '${summary.value?.toStringAsFixed(2) ?? 'No comparable value'} ${summary.unit}',
-                  ),
-                  subtitle: Text(
-                    '${summary.source} · ${summary.sampleCount} samples${summary.hasConflict && summary.value != null ? '\nConflicting stages treated as unclassified asleep.' : ''}${summary.stages.isEmpty ? '' : '\nSleep stages (minutes): ${summary.stages}'}',
-                  ),
+            if (!vault.withheldDays.contains(
+                  DateTime.utc(
+                    start.year,
+                    start.month,
+                    start.day,
+                  ).add(Duration(days: i)),
+                ) &&
+                !vault.summaries.any(
+                  (s) =>
+                      s.date.year == start.add(Duration(days: i)).year &&
+                      s.date.month == start.add(Duration(days: i)).month &&
+                      s.date.day == start.add(Duration(days: i)).day,
+                ))
+              const Text('No recorded observations · coverage gap'),
+            for (final summary in vault.summaries.where(
+              (s) =>
+                  s.date.year == start.add(Duration(days: i)).year &&
+                  s.date.month == start.add(Duration(days: i)).month &&
+                  s.date.day == start.add(Duration(days: i)).day,
+            ))
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  summary.hasConflict && summary.value == null
+                      ? 'Conflicting intervals · total withheld'
+                      : '${summary.value?.toStringAsFixed(2) ?? 'No comparable value'} ${summary.unit}',
                 ),
-            ],
+                subtitle: Text(
+                  '${summary.source} · ${summary.sampleCount} samples${summary.hasConflict && summary.value != null ? '\nConflicting stages treated as unclassified asleep.' : ''}${summary.stages.isEmpty ? '' : '\nSleep stages (minutes): ${summary.stages}'}',
+                ),
+              ),
+          ],
           const Divider(),
           const Text('Local context notes', style: TextStyle(fontSize: 20)),
           if (vault.notes.isEmpty) const Text('No notes for this week.'),
