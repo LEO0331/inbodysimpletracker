@@ -89,6 +89,7 @@ class CheckpointProvider extends ChangeNotifier {
     int? reps,
     double? rpe,
     String? notes,
+    bool checkDuplicates = false,
   }) async {
     if (_disposed) throw StateError('This checkpoint session has ended.');
     if (isSaving) throw StateError('A checkpoint is already being saved.');
@@ -121,6 +122,38 @@ class CheckpointProvider extends ChangeNotifier {
     String? id;
     var savingMetadata = false;
     try {
+      String? fingerprint;
+      if (checkDuplicates) {
+        if (isLoading || error != null) {
+          throw ArgumentError(
+            'Wait for checkpoint history to load before importing.',
+          );
+        }
+        fingerprint = await localVideoService.fingerprintVideo(
+          video.path!,
+          maxSizeBytes: maxVideoBytes,
+        );
+        for (final existing in List<TrainingCheckpoint>.of(checkpoints)) {
+          var existingHash = existing.videoSha256;
+          if (existingHash == null) {
+            final path = await localVideoService.resolvePath(
+              existing.localVideoPath,
+              checkpointId: existing.id,
+            );
+            if (path != null) {
+              existingHash = await localVideoService.fingerprintVideo(
+                path,
+                maxSizeBytes: maxVideoBytes,
+              );
+            }
+          }
+          if (existingHash == fingerprint) {
+            throw ArgumentError(
+              'This video is already imported as ${existing.exerciseName}. Skip this clip.',
+            );
+          }
+        }
+      }
       id = _checkpointService.createId(uid);
       localPath = await localVideoService.copyVideo(
         checkpointId: id,
@@ -128,6 +161,22 @@ class CheckpointProvider extends ChangeNotifier {
         originalFileName: video.name,
         maxSizeBytes: maxVideoBytes,
       );
+      if (fingerprint != null) {
+        final copiedPath = await localVideoService.resolvePath(
+          localPath,
+          checkpointId: id,
+        );
+        if (copiedPath == null ||
+            await localVideoService.fingerprintVideo(
+                  copiedPath,
+                  maxSizeBytes: maxVideoBytes,
+                ) !=
+                fingerprint) {
+          throw ArgumentError(
+            'The selected file changed while copying. Please select it again.',
+          );
+        }
+      }
       if (_disposed) throw StateError('This checkpoint session has ended.');
       final now = DateTime.now();
       final checkpoint = TrainingCheckpoint(
@@ -145,6 +194,7 @@ class CheckpointProvider extends ChangeNotifier {
         localVideoPath: localPath,
         originalFileName: video.name,
         fileSizeBytes: video.size,
+        videoSha256: fingerprint,
         createdAt: now,
         updatedAt: now,
       );

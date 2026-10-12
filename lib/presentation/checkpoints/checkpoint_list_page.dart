@@ -4,6 +4,7 @@ import '../../data/models/training_checkpoint.dart';
 import '../../logic/providers/checkpoint_provider.dart';
 import 'add_checkpoint_page.dart';
 import 'checkpoint_detail_page.dart';
+import 'import_checkpoint_videos_page.dart';
 import 'widgets/checkpoint_card.dart';
 import 'widgets/checkpoint_labels.dart';
 
@@ -66,7 +67,24 @@ class _CheckpointListPageState extends State<CheckpointListPage> {
         )
         .toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('Training Checkpoints')),
+      appBar: AppBar(
+        title: const Text('Training Checkpoints'),
+        actions: [
+          IconButton(
+            tooltip: 'Import videos',
+            icon: const Icon(Icons.video_library),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChangeNotifierProvider.value(
+                  value: provider,
+                  child: const ImportCheckpointVideosPage(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _add,
         icon: const Icon(Icons.add),

@@ -64,6 +64,7 @@ void main() {
       originalFileName: 'video.mov',
       fileSizeBytes: 4,
       durationMs: 200,
+      videoSha256: 'a' * 64,
       createdAt: date,
       updatedAt: date,
     );
@@ -73,6 +74,11 @@ void main() {
     final restored = TrainingCheckpoint.fromMap(checkpoint.id, map);
     expect(restored.toMap(), map);
     expect(restored.id, checkpoint.id);
+    expect(restored.videoSha256, 'a' * 64);
+    expect(
+      TrainingCheckpoint.fromMap('bad', {'videoSha256': '../file'}).videoSha256,
+      isNull,
+    );
   });
 
   test('null fields and unknown enum values have safe defaults', () {

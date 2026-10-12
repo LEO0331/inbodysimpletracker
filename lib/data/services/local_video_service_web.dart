@@ -1,7 +1,17 @@
+import 'package:file_picker/file_picker.dart';
+
 import '../../core/utils/checkpoint_validation.dart';
 
 class LocalVideoService {
   bool get isSupported => false;
+
+  Future<List<PlatformFile>> scanDirectory(String path) async =>
+      throw UnsupportedError('Folder import is unavailable on web.');
+
+  Future<String> fingerprintVideo(
+    String path, {
+    int maxSizeBytes = defaultMaxVideoBytes,
+  }) async => throw UnsupportedError('Video import is unavailable on web.');
 
   Future<String> copyVideo({
     required String checkpointId,

@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/utils/checkpoint_validation.dart';
@@ -13,6 +15,52 @@ class LocalVideoService {
           documentsDirectory ?? getApplicationDocumentsDirectory;
 
   bool get isSupported => true;
+
+  /// Only direct regular files are selected; links and nested folders are skipped.
+  Future<List<PlatformFile>> scanDirectory(String path) async {
+    final files = <PlatformFile>[];
+    await for (final entity in Directory(path).list(followLinks: false)) {
+      if (entity is! File) continue;
+      final name = entity.uri.pathSegments.last;
+      if (!RegExp(r'\.(mp4|mov|m4v)$', caseSensitive: false).hasMatch(name)) {
+        continue;
+      }
+      files.add(
+        PlatformFile(
+          name: name,
+          size: await entity.length(),
+          path: entity.path,
+        ),
+      );
+    }
+    files.sort((a, b) => a.name.compareTo(b.name));
+    return files;
+  }
+
+  /// Stream bytes so large clips do not have to fit in memory.
+  Future<String> fingerprintVideo(
+    String path, {
+    int maxSizeBytes = defaultMaxVideoBytes,
+  }) async {
+    final file = File(path);
+    final length = await file.length();
+    if (length <= 0 || length > maxSizeBytes) {
+      throw ArgumentError('Select a non-empty video within the size limit.');
+    }
+    var read = 0;
+    final chunks = file.openRead().map((chunk) {
+      read += chunk.length;
+      if (read > maxSizeBytes) {
+        throw ArgumentError('Video exceeds the size limit.');
+      }
+      return chunk;
+    });
+    final digest = await sha256.bind(chunks).first;
+    if (read != length || await file.length() != length) {
+      throw StateError('The selected file changed. Please select it again.');
+    }
+    return digest.toString();
+  }
 
   static String sanitizeFileName(String name) {
     final base = name.replaceAll('\\', '/').split('/').last;

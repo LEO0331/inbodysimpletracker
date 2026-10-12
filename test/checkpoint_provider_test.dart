@@ -112,6 +112,103 @@ void main() {
     expect(provider.isSaving, isFalse);
   });
 
+  test(
+    'batch import detects renamed duplicates after a successful save',
+    () async {
+      final hash = 'a' * 64;
+      stream.add([]);
+      await Future<void>.delayed(Duration.zero);
+      when(() => videos.fingerprintVideo(any())).thenAnswer((_) async => hash);
+      when(
+        () => videos.resolvePath(fallback.localVideoPath, checkpointId: 'id'),
+      ).thenAnswer((_) async => '/managed');
+      Future<TrainingCheckpoint> batchSave() => provider.saveCheckpoint(
+        checkpointDate: date,
+        exerciseName: 'Squat',
+        side: CheckpointSide.bilateral,
+        cameraAngle: CameraAngle.side,
+        video: PlatformFile(name: 'video.mov', size: 4, path: '/picked'),
+        checkDuplicates: true,
+      );
+      final saved = await batchSave();
+      expect(saved.videoSha256, hash);
+      await expectLater(batchSave(), throwsArgumentError);
+      verify(() => metadata.saveCheckpoint('user', any())).called(1);
+      verify(
+        () => videos.copyVideo(
+          checkpointId: 'id',
+          sourcePath: '/picked',
+          originalFileName: 'video.mov',
+        ),
+      ).called(1);
+    },
+  );
+
+  test(
+    'batch import rejects changed content and cleans copied bytes',
+    () async {
+      stream.add([]);
+      await Future<void>.delayed(Duration.zero);
+      when(
+        () => videos.fingerprintVideo('/picked'),
+      ).thenAnswer((_) async => 'a' * 64);
+      when(
+        () => videos.fingerprintVideo('/managed'),
+      ).thenAnswer((_) async => 'b' * 64);
+      when(
+        () => videos.resolvePath(fallback.localVideoPath, checkpointId: 'id'),
+      ).thenAnswer((_) async => '/managed');
+      await expectLater(
+        provider.saveCheckpoint(
+          checkpointDate: date,
+          exerciseName: 'Squat',
+          side: CheckpointSide.bilateral,
+          cameraAngle: CameraAngle.side,
+          video: PlatformFile(name: 'video.mov', size: 4, path: '/picked'),
+          checkDuplicates: true,
+        ),
+        throwsArgumentError,
+      );
+      verifyNever(() => metadata.saveCheckpoint('user', any()));
+      verify(
+        () => videos.deleteVideo(fallback.localVideoPath, checkpointId: 'id'),
+      ).called(1);
+    },
+  );
+
+  test(
+    'batch import checks legacy local videos and waits for history',
+    () async {
+      Future<TrainingCheckpoint> batchSave() => provider.saveCheckpoint(
+        checkpointDate: date,
+        exerciseName: 'Squat',
+        side: CheckpointSide.bilateral,
+        cameraAngle: CameraAngle.other,
+        video: PlatformFile(name: 'video.mov', size: 4, path: '/picked'),
+        checkDuplicates: true,
+      );
+      await expectLater(batchSave(), throwsArgumentError);
+      verifyNever(() => videos.fingerprintVideo(any()));
+      stream.add([fallback]);
+      await Future<void>.delayed(Duration.zero);
+      when(
+        () => videos.fingerprintVideo(any()),
+      ).thenAnswer((_) async => 'a' * 64);
+      when(
+        () => videos.resolvePath(fallback.localVideoPath, checkpointId: 'id'),
+      ).thenAnswer((_) async => '/managed');
+      await expectLater(batchSave(), throwsArgumentError);
+      verifyNever(() => metadata.saveCheckpoint('user', any()));
+      verifyNever(
+        () => videos.copyVideo(
+          checkpointId: 'id',
+          sourcePath: '/picked',
+          originalFileName: 'video.mov',
+        ),
+      );
+    },
+  );
+
   test('duplicate save is rejected while first save is pending', () async {
     final pending = Completer<void>();
     when(

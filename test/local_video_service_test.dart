@@ -17,6 +17,50 @@ void main() {
   });
   tearDown(() async => temporaryDirectory.delete(recursive: true));
 
+  test(
+    'folder scan includes only direct supported files in stable order',
+    () async {
+      await File('${temporaryDirectory.path}/b.MP4').writeAsBytes([1]);
+      await File('${temporaryDirectory.path}/a.mov').writeAsBytes([2]);
+      await File('${temporaryDirectory.path}/notes.txt').writeAsString('notes');
+      final nested = await Directory(
+        '${temporaryDirectory.path}/nested',
+      ).create();
+      await File('${nested.path}/hidden.mp4').writeAsBytes([3]);
+      final files = await service.scanDirectory(temporaryDirectory.path);
+      expect(files.map((file) => file.name), ['a.mov', 'b.MP4']);
+      expect(files.map((file) => file.size), [1, 1]);
+    },
+  );
+
+  test(
+    'fingerprints compare contents rather than filenames and bound size',
+    () async {
+      final first = File('${temporaryDirectory.path}/one.mp4');
+      final renamed = File('${temporaryDirectory.path}/two.mov');
+      await first.writeAsBytes([1, 2, 3]);
+      await renamed.writeAsBytes([1, 2, 3]);
+      expect(
+        await service.fingerprintVideo(first.path),
+        await service.fingerprintVideo(renamed.path),
+      );
+      await renamed.writeAsBytes([3, 2, 1]);
+      expect(
+        await service.fingerprintVideo(first.path),
+        isNot(await service.fingerprintVideo(renamed.path)),
+      );
+      await expectLater(
+        service.fingerprintVideo(first.path, maxSizeBytes: 2),
+        throwsArgumentError,
+      );
+      await renamed.writeAsBytes([]);
+      await expectLater(
+        service.fingerprintVideo(renamed.path),
+        throwsArgumentError,
+      );
+    },
+  );
+
   test('destination paths sanitize filenames and reject invalid IDs', () {
     expect(
       LocalVideoService.destinationReference('safe_id', '../../My video.mov'),

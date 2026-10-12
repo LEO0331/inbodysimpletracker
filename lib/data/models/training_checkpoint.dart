@@ -20,6 +20,7 @@ class TrainingCheckpoint {
   final String originalFileName;
   final int? fileSizeBytes;
   final int? durationMs;
+  final String? videoSha256;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -39,6 +40,7 @@ class TrainingCheckpoint {
     required this.originalFileName,
     this.fileSizeBytes,
     this.durationMs,
+    this.videoSha256,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -58,6 +60,7 @@ class TrainingCheckpoint {
     'originalFileName': originalFileName,
     'fileSizeBytes': fileSizeBytes,
     'durationMs': durationMs,
+    if (videoSha256 != null) 'videoSha256': videoSha256,
     'createdAt': Timestamp.fromDate(createdAt),
     'updatedAt': Timestamp.fromDate(updatedAt),
   };
@@ -160,6 +163,11 @@ class TrainingCheckpoint {
       originalFileName: string(data['originalFileName']),
       fileSizeBytes: integer(data['fileSizeBytes']),
       durationMs: integer(data['durationMs']),
+      videoSha256:
+          data['videoSha256'] is String &&
+              RegExp(r'^[a-f0-9]{64}$').hasMatch(data['videoSha256'] as String)
+          ? data['videoSha256'] as String
+          : null,
       createdAt: date(data['createdAt']),
       updatedAt: date(data['updatedAt']),
     );

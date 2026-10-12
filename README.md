@@ -82,6 +82,28 @@ unit, sets, reps, RPE (1–10), and notes. History shows newest first, with exer
 side, and All / last 3 months / last 6 months filters. Open a checkpoint to play,
 pause, or seek its video; confirm deletion to remove the managed video and metadata.
 
+Use **Import videos** in the checkpoint toolbar to choose a folder or select
+multiple MP4/MOV/M4V files. Folder scanning includes direct regular files only;
+subfolders and symbolic links are skipped. Review each clip, preview it where
+playback is supported, enter its exercise, and explicitly choose its workout date.
+File timestamps are not treated as workout dates. Optional load, sets, reps, RPE,
+and notes can remain blank. Save each reviewed clip, skip it, or remove it from
+the queue. Failed saves can be retried without repeating successful imports.
+The queue is kept only while the import page is open.
+
+Batch imports compare streamed SHA-256 content hashes, including against existing
+local clips, to reject renamed duplicates. Successful batch imports retain the
+hash in checkpoint metadata for subsequent checks. Older checkpoints whose video
+is unavailable on this device cannot be checked unless they already have a hash.
+The app waits for checkpoint history before saving batch imports. Originals remain
+untouched and failed metadata saves use the existing managed-copy cleanup.
+
+For videos on a Windows PC, transfer them to the phone's Files/Downloads first
+and use **Select videos** (or **Choose folder** where supported). The current
+Firebase configuration does not enable the Windows app. The web app cannot import
+local training videos. No automatic exercise recognition or codec analysis is
+performed; review the preview and enter the training details yourself.
+
 New checkpoints require a trimmed exercise name (up to 120 characters). Optional
 load, sets, and reps must be positive; load and RPE allow decimals. Notes allow
 4,000 characters and load units allow 20. Supported filename extensions are MP4,

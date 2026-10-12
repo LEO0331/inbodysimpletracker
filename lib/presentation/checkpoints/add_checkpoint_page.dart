@@ -7,9 +7,18 @@ import '../../data/models/training_checkpoint.dart';
 import '../../logic/providers/checkpoint_provider.dart';
 import 'widgets/checkpoint_form_validation.dart';
 import 'widgets/checkpoint_labels.dart';
+import 'widgets/checkpoint_video_player.dart';
 
 class AddCheckpointPage extends StatefulWidget {
-  const AddCheckpointPage({super.key});
+  const AddCheckpointPage({
+    super.key,
+    this.initialVideo,
+    this.requireDateConfirmation = false,
+    this.onSaveError,
+  });
+  final PlatformFile? initialVideo;
+  final bool requireDateConfirmation;
+  final VoidCallback? onSaveError;
   @override
   State<AddCheckpointPage> createState() => _AddCheckpointPageState();
 }
@@ -30,6 +39,15 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
   bool _saving = false;
   bool _picking = false;
   String? _videoError;
+  bool _dateConfirmed = false;
+  String? _dateError;
+
+  @override
+  void initState() {
+    super.initState();
+    _video = widget.initialVideo;
+    if (widget.initialVideo != null) _angle = CameraAngle.other;
+  }
 
   @override
   void dispose() {
@@ -87,8 +105,13 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
   Future<void> _save() async {
     if (_saving) return;
     final valid = _form.currentState!.validate();
-    setState(() => _videoError = _validateVideo(_video));
-    if (!valid || _videoError != null) return;
+    setState(() {
+      _videoError = _validateVideo(_video);
+      _dateError = widget.requireDateConfirmation && !_dateConfirmed
+          ? 'Choose or confirm the workout date before saving.'
+          : null;
+    });
+    if (!valid || _videoError != null || _dateError != null) return;
     setState(() => _saving = true);
     try {
       await context.read<CheckpointProvider>().saveCheckpoint(
@@ -97,6 +120,7 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
         side: _side,
         cameraAngle: _angle,
         video: _video!,
+        checkDuplicates: widget.initialVideo != null,
         load: double.tryParse(_load.text.trim()),
         loadUnit: _unit.text.trim().isEmpty ? 'kg' : _unit.text.trim(),
         sets: int.tryParse(_sets.text.trim()),
@@ -106,6 +130,7 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
       );
       if (mounted) Navigator.pop(context, true);
     } catch (error) {
+      widget.onSaveError?.call();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -145,7 +170,7 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'Adding local video checkpoints is currently available on mobile.',
+                  'Local video imports are unavailable in the web app.',
                 ),
               ),
             )
@@ -179,10 +204,36 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
                               lastDate: DateTime(2100),
                             );
                             if (date != null && mounted) {
-                              setState(() => _date = date);
+                              setState(() {
+                                _date = date;
+                                _dateConfirmed = true;
+                                _dateError = null;
+                              });
                             }
                           },
                         ),
+                        if (widget.requireDateConfirmation)
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text(
+                              'I confirm this is the workout date',
+                            ),
+                            subtitle: const Text(
+                              'File dates are not used as workout dates.',
+                            ),
+                            value: _dateConfirmed,
+                            onChanged: (value) => setState(() {
+                              _dateConfirmed = value ?? false;
+                              _dateError = null;
+                            }),
+                          ),
+                        if (_dateError != null)
+                          Text(
+                            _dateError!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
                         TextFormField(
                           controller: _exercise,
                           decoration: const InputDecoration(
@@ -238,15 +289,24 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
                           validator: optionalNotes,
                         ),
                         const SizedBox(height: 16),
-                        OutlinedButton.icon(
-                          onPressed: _picking ? null : _pickVideo,
-                          icon: const Icon(Icons.folder_open),
-                          label: Text(
-                            _picking
-                                ? 'Opening Files…'
-                                : 'Select video from Files',
+                        if (widget.initialVideo != null &&
+                            _video?.path != null) ...[
+                          CheckpointVideoPlayer(path: _video!.path!),
+                          const Text(
+                            'Preview availability depends on this device. You can save even if playback is unsupported.',
                           ),
-                        ),
+                          const SizedBox(height: 16),
+                        ],
+                        if (widget.initialVideo == null)
+                          OutlinedButton.icon(
+                            onPressed: _picking ? null : _pickVideo,
+                            icon: const Icon(Icons.folder_open),
+                            label: Text(
+                              _picking
+                                  ? 'Opening Files…'
+                                  : 'Select video from Files',
+                            ),
+                          ),
                         if (_video != null)
                           Text(
                             '${_video!.name} • ${(_video!.size / (1024 * 1024)).toStringAsFixed(1)} MB',

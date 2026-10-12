@@ -9,15 +9,24 @@ import 'package:inbodysimpletracker/data/services/checkpoint_service.dart';
 import 'package:inbodysimpletracker/data/services/local_video_service.dart';
 import 'package:inbodysimpletracker/logic/providers/checkpoint_provider.dart';
 import 'package:inbodysimpletracker/presentation/checkpoints/checkpoint_list_page.dart';
+import 'package:inbodysimpletracker/presentation/checkpoints/import_checkpoint_videos_page.dart';
 
 class _Metadata extends Mock implements CheckpointService {}
 
 class _Videos extends Mock implements LocalVideoService {}
 
 class _Picker extends FilePicker {
-  _Picker({this.file, this.cancel = false});
+  _Picker({this.file, this.cancel = false, this.files, this.directory});
   final PlatformFile? file;
   final bool cancel;
+  final List<PlatformFile>? files;
+  final String? directory;
+  @override
+  Future<String?> getDirectoryPath({
+    String? dialogTitle,
+    bool lockParentWindow = false,
+    String? initialDirectory,
+  }) async => directory;
   @override
   Future<FilePickerResult?> pickFiles({
     String? dialogTitle,
@@ -38,6 +47,10 @@ class _Picker extends FilePicker {
     expect(withData, isFalse);
     expect(allowCompression, isFalse);
     if (cancel) return null;
+    if (files != null) {
+      expect(allowMultiple, isTrue);
+      return FilePickerResult(files!);
+    }
     return FilePickerResult([
       file ??
           PlatformFile(
@@ -127,6 +140,152 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'batch review requires a date and keeps failed imports retryable',
+    (tester) async {
+      final file = PlatformFile(
+        name: 'runtime.mov',
+        size: 1024,
+        path: '/runtime/selection.mov',
+      );
+      FilePicker.platform = _Picker(
+        files: [
+          file,
+          PlatformFile(name: 'skip.mp4', size: 512, path: '/runtime/skip.mp4'),
+        ],
+      );
+      when(
+        () => videos.fingerprintVideo(
+          any(),
+          maxSizeBytes: any(named: 'maxSizeBytes'),
+        ),
+      ).thenAnswer((_) async => 'hash');
+      when(
+        () => videos.resolvePath(
+          'training_videos/new/runtime.mov',
+          checkpointId: 'new',
+        ),
+      ).thenAnswer((_) async => '/managed/runtime.mov');
+      when(
+        () => metadata.saveCheckpoint('user', any()),
+      ).thenThrow(StateError('denied'));
+      await showHistory(tester);
+      await tester.tap(find.byTooltip('Import videos'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ImportCheckpointVideosPage), findsOneWidget);
+      await tester.tap(find.text('Select videos'));
+      await tester.pumpAndSettle();
+      expect(find.text('runtime.mov'), findsOneWidget);
+      await tester.tap(find.text('Review').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Select video from Files'), findsNothing);
+      expect(find.text('Other'), findsOneWidget);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Exercise name'),
+        'Squat',
+      );
+      final save = find.widgetWithText(FilledButton, 'Save');
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.text('Choose or confirm the workout date before saving.'),
+      );
+      expect(
+        find.text('Choose or confirm the workout date before saving.'),
+        findsOneWidget,
+      );
+      verifyNever(() => metadata.saveCheckpoint('user', any()));
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Unable to save checkpoint metadata'),
+        findsOneWidget,
+      );
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Retry'), findsOneWidget);
+      expect(find.textContaining('0 saved'), findsOneWidget);
+      when(
+        () => metadata.saveCheckpoint('user', any()),
+      ).thenAnswer((_) async {});
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Exercise name'),
+        'Squat',
+      );
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Save'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('1 saved'), findsOneWidget);
+      expect(find.text('Retry'), findsNothing);
+      await tester.tap(find.byTooltip('Skip video'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('1 skipped'), findsOneWidget);
+      await tester.tap(find.byTooltip('Remove from import list'));
+      await tester.pumpAndSettle();
+      expect(find.text('skip.mp4'), findsNothing);
+      expect(find.text('runtime.mov'), findsOneWidget);
+    },
+  );
+
+  testWidgets('folder scan lists candidates without changing files', (
+    tester,
+  ) async {
+    FilePicker.platform = _Picker(directory: '/gym');
+    when(() => videos.scanDirectory('/gym')).thenAnswer(
+      (_) async => [
+        PlatformFile(name: 'squat.mp4', size: 2048, path: '/gym/squat.mp4'),
+        PlatformFile(name: 'row.mov', size: 1024, path: '/gym/row.mov'),
+      ],
+    );
+    await showHistory(tester);
+    await tester.tap(find.byTooltip('Import videos'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Choose folder'));
+    await tester.pumpAndSettle();
+    expect(find.text('squat.mp4'), findsOneWidget);
+    expect(find.text('row.mov'), findsOneWidget);
+    expect(find.textContaining('2 remaining'), findsOneWidget);
+    verify(() => videos.scanDirectory('/gym')).called(1);
+    verifyNever(() => metadata.saveCheckpoint('user', any()));
+  });
+
+  testWidgets('failed folder scan allows selecting files instead', (
+    tester,
+  ) async {
+    final file = PlatformFile(
+      name: 'fallback.mp4',
+      size: 1024,
+      path: '/files/fallback.mp4',
+    );
+    FilePicker.platform = _Picker(directory: '/unavailable', files: [file]);
+    when(
+      () => videos.scanDirectory('/unavailable'),
+    ).thenThrow(StateError('unavailable'));
+    await showHistory(tester);
+    await tester.tap(find.byTooltip('Import videos'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Choose folder'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Try selecting video files instead'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Select videos'));
+    await tester.pumpAndSettle();
+    expect(find.text('fallback.mp4'), findsOneWidget);
+    expect(
+      find.textContaining('Try selecting video files instead'),
+      findsNothing,
+    );
+  });
 
   testWidgets(
     'selects runtime Files video and saves metadata without uploading',
