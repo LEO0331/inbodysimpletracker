@@ -659,6 +659,8 @@ flutter pub run build_runner build
 
 ### 🌐 Live Access
 - **Web Demo**: [InBody Simple Tracker](https://leo0331.github.io/inbodysimpletracker/) 
+- **Deployment**: pushes to `main` build and deploy a verified Pages artifact;
+  no generated deployment branch is needed. See [GitHub Pages deployment](docs/github-pages-deployment.md).
 
 ### 📸 UI Gallery
 These are historical demo screenshots, not evidence of the current Windows UI.

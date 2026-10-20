@@ -61,6 +61,9 @@ validation is completed and the build gate is enabled. See
   video extensions, Health exports, backups and databases are Git-ignored.
 - The publication guard checks tracked files before building and web assets before
   publishing. It rejects private stores, runtime directories and video files.
+- Pages deployment uploads only the verified `build/web` directory as a short-lived
+  artifact, then deploys it with the official Pages action. It does not commit build
+  output to a deployment branch. See [deployment details](github-pages-deployment.md).
 - Personal files must never be added as Flutter assets, test fixtures, screenshots
   or CI artifacts. Use synthetic test data. Ignore rules can be overridden and do
   not erase history; the guard is an additional check, not a complete secret scanner.

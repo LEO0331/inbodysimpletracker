@@ -3,6 +3,10 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [ main ] # 當推送到 main 分支時觸發
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 # Any workflow publishing this branch must use the same concurrency group.
 concurrency:
@@ -13,11 +17,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      pages: read
     env:
       BASE_HREF: /inbodysimpletracker/
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
 
       - name: Verify tracked assets are safe to publish
         run: |
@@ -54,9 +62,22 @@ jobs:
           echo "Top 20 largest files in build/web:"
           find build/web -type f -print0 | xargs -0 du -h | sort -hr | head -n 20
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Upload verified Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: ./build/web
+          path: ./build/web
+          retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
