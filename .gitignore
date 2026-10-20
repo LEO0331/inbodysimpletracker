@@ -50,6 +50,7 @@ macos/Runner/GoogleService-Info.plist
 .omx
 
 # User-selected training videos are runtime data, never source assets.
+.local/
 **/training_videos/
 *.[mM][pP]4
 *.[mM][oO][vV]

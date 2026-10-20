@@ -98,11 +98,24 @@ is unavailable on this device cannot be checked unless they already have a hash.
 The app waits for checkpoint history before saving batch imports. Originals remain
 untouched and failed metadata saves use the existing managed-copy cleanup.
 
-For videos on a Windows PC, transfer them to the phone's Files/Downloads first
-and use **Select videos** (or **Choose folder** where supported). The current
-Firebase configuration does not enable the Windows app. The web app cannot import
-local training videos. No automatic exercise recognition or codec analysis is
-performed; review the preview and enter the training details yourself.
+On Windows, startup opens **Local Training Checkpoints** without Firebase or sign-in.
+Use **Import videos** to select local clips or a folder. Windows stores a link to
+each original video without copying it; this mode never syncs metadata to Firebase. The
+default store is `%APPDATA%/InBodySimpleTracker/checkpoints`, configurable at build
+time with `--dart-define=LOCAL_CHECKPOINT_DIRECTORY=<absolute-private-directory>`.
+`checkpoints.json` stores record details and device-only video links.
+Playback opens the local file in the default Windows video player. Native codec
+support depends on that player. Moving or deleting an original makes playback
+unavailable, while the checkpoint record stays intact. Deleting a linked checkpoint
+never deletes its original video. Back up the record store and any originals you
+want to retain separately. This store is separate from the encrypted Local Health vault.
+
+For phone playback, transfer the originals to the phone's Files/Downloads and import
+there. The web app cannot import local training videos. No automatic exercise
+recognition or codec analysis is performed; review the preview and enter details.
+Never place personal videos or local checkpoint JSON in source assets: `.local/`,
+managed video folders and video extensions are Git-ignored, and CI rejects tracked
+videos or checkpoint stores before publication.
 
 New checkpoints require a trimmed exercise name (up to 120 characters). Optional
 load, sets, and reps must be positive; load and RPE allow decimals. Notes allow
@@ -136,10 +149,10 @@ Limitations:
   display **"Video is not available on this device."** Metadata syncing does not
   synchronize video files. Deletion on another device cannot remove the original
   device's local copy.
-- Adding local video checkpoints is currently available on mobile (iOS/Android).
+- Adding local video checkpoints is available on mobile (iOS/Android) and Windows.
   Web can display checkpoint metadata but cannot save or play these mobile files.
   Existing InBody web functionality remains available.
-- Saving metadata requires Firestore access; a failed save cleans up the copied
+- Saving mobile metadata requires Firestore access; a failed save cleans up the copied
   video when possible. Large videos require enough local free space. Playback
   support depends on the device's video codecs; a file extension alone does not
   guarantee a playable video.

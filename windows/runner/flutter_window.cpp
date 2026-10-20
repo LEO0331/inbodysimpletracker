@@ -1,8 +1,12 @@
 #include "flutter_window.h"
 
 #include <optional>
-
-#include "flutter/generated_plugin_registrant.h"
+#include <algorithm>
+#include <cwctype>
+#include <filesystem>
+#include <shellapi.h>
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -24,7 +28,42 @@ bool FlutterWindow::OnCreate() {
   if (!flutter_controller_->engine() || !flutter_controller_->view()) {
     return false;
   }
-  RegisterPlugins(flutter_controller_->engine());
+  // Windows is a device-only checkpoint app. FilePicker's Windows implementation
+  // uses Dart FFI; cloud and Health plugins are intentionally not registered.
+  flutter::MethodChannel<flutter::EncodableValue> video_channel(
+      flutter_controller_->engine()->messenger(), "inbody/local_video",
+      &flutter::StandardMethodCodec::GetInstance());
+  video_channel.SetMethodCallHandler(
+      [](const auto& call, auto result) {
+        if (call.method_name() != "open") {
+          result->NotImplemented();
+          return;
+        }
+        const auto* argument = call.arguments();
+        const auto* raw = argument ? std::get_if<std::string>(argument) : nullptr;
+        if (!raw || raw->empty() || raw->find('\0') != std::string::npos) {
+          result->Error("invalid_path", "Select a local video file.");
+          return;
+        }
+        const auto path = std::filesystem::u8path(*raw);
+        auto extension = path.extension().wstring();
+        std::transform(extension.begin(), extension.end(), extension.begin(),
+                       [](wchar_t c) { return static_cast<wchar_t>(towlower(c)); });
+        std::error_code error;
+        if (!path.is_absolute() || path.wstring().rfind(L"\\\\", 0) == 0 ||
+            (extension != L".mp4" && extension != L".mov" && extension != L".m4v") ||
+            !std::filesystem::is_regular_file(path, error)) {
+          result->Error("invalid_path", "Video is unavailable or unsupported.");
+          return;
+        }
+        const auto opened = reinterpret_cast<INT_PTR>(
+            ShellExecuteW(nullptr, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
+        if (opened <= 32) {
+          result->Error("open_failed", "Windows could not open the video.");
+        } else {
+          result->Success();
+        }
+      });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {

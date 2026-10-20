@@ -19,10 +19,10 @@ List<TrainingCheckpoint> decodeCheckpointSnapshotRecords(
 }
 
 class CheckpointService {
-  final FirebaseFirestore _db;
+  final FirebaseFirestore? _providedDb;
+  FirebaseFirestore get _db => _providedDb ?? FirebaseFirestore.instance;
 
-  CheckpointService({FirebaseFirestore? db})
-    : _db = db ?? FirebaseFirestore.instance;
+  CheckpointService({FirebaseFirestore? db}) : _providedDb = db;
 
   CollectionReference<Map<String, dynamic>> _collection(String uid) =>
       _db.collection('users').doc(uid).collection('checkpoints');

@@ -185,8 +185,13 @@ class _AddCheckpointPageState extends State<AddCheckpointPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Text(
-                          'The video stays on this device. Only checkpoint metadata is synced.',
+                        Text(
+                          context
+                                      .read<CheckpointProvider?>()
+                                      ?.metadataIsLocal ==
+                                  true
+                              ? 'This PC saves a link to your original video without copying or uploading it. Moving or deleting that file makes playback unavailable.'
+                              : 'The video stays on this device. Only checkpoint metadata is synced.',
                         ),
                         Text(
                           'MP4, MOV, or M4V, up to ${(_maxVideoBytes / (1024 * 1024)).toStringAsFixed(0)} MB.',

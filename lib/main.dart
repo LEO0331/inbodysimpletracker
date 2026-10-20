@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +9,8 @@ import 'firebase_options.dart';
 import 'logic/providers/auth_provider.dart';
 import 'logic/providers/report_provider.dart';
 import 'presentation/auth/home_page.dart';
+import 'presentation/checkpoints/local_checkpoint_entry_stub.dart'
+    if (dart.library.io) 'presentation/checkpoints/local_checkpoint_entry_page.dart';
 import 'presentation/health_cloud_context.dart';
 import 'presentation/health/health_entry_page.dart' deferred as health_page;
 import 'presentation/checkpoints/checkpoint_entry_page.dart'
@@ -58,6 +61,14 @@ class _BootstrapAppState extends State<BootstrapApp> {
 
   @override
   Widget build(BuildContext context) {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      return MaterialApp(
+        title: 'InBody Local Checkpoints',
+        debugShowCheckedModeBanner: false,
+        theme: _buildTheme(),
+        home: const LocalCheckpointEntryPage(),
+      );
+    }
     return FutureBuilder<void>(
       future: _bootstrapFuture,
       builder: (context, snapshot) {

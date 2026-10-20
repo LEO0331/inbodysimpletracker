@@ -26,6 +26,7 @@ class CheckpointProvider extends ChangeNotifier {
   final CheckpointService _checkpointService;
   final LocalVideoService localVideoService;
   final int maxVideoBytes;
+  final bool metadataIsLocal;
   final Map<String, TrainingCheckpoint> _deleting = {};
   StreamSubscription<List<TrainingCheckpoint>>? _subscription;
   bool _disposed = false;
@@ -39,6 +40,7 @@ class CheckpointProvider extends ChangeNotifier {
     CheckpointService? checkpointService,
     LocalVideoService? localVideoService,
     this.maxVideoBytes = defaultMaxVideoBytes,
+    this.metadataIsLocal = false,
   }) : _checkpointService = checkpointService ?? CheckpointService(),
        localVideoService = localVideoService ?? LocalVideoService() {
     _subscription = _checkpointService
@@ -123,7 +125,7 @@ class CheckpointProvider extends ChangeNotifier {
     var savingMetadata = false;
     try {
       String? fingerprint;
-      if (checkDuplicates) {
+      if (checkDuplicates || metadataIsLocal) {
         if (isLoading || error != null) {
           throw ArgumentError(
             'Wait for checkpoint history to load before importing.',
@@ -224,7 +226,9 @@ class CheckpointProvider extends ChangeNotifier {
       if (_disposed) throw StateError('This checkpoint session has ended.');
       if (exception is ArgumentError) rethrow;
       throw CheckpointOperationException(
-        savingMetadata
+        metadataIsLocal
+            ? 'Unable to save checkpoint. Your original video was kept; please try again.'
+            : savingMetadata
             ? 'Unable to save checkpoint metadata. The local copy was removed; please try again.'
             : 'Unable to copy the selected video. Check that the file is available and the device has enough storage, then try again.',
       );
@@ -255,9 +259,11 @@ class CheckpointProvider extends ChangeNotifier {
       try {
         await _checkpointService.deleteCheckpoint(uid, checkpoint.id);
       } catch (_) {
-        throw const CheckpointOperationException(
-          'The local video was removed, but checkpoint metadata could not be deleted. Please retry deleting the checkpoint.',
-          localVideoRemoved: true,
+        throw CheckpointOperationException(
+          metadataIsLocal
+              ? 'Unable to delete the checkpoint record. Your original video was kept; please try again.'
+              : 'The local video was removed, but checkpoint metadata could not be deleted. Please retry deleting the checkpoint.',
+          localVideoRemoved: !metadataIsLocal,
         );
       }
       checkpoints.removeWhere((item) => item.id == checkpoint.id);

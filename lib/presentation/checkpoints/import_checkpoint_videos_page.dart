@@ -132,8 +132,10 @@ class _ImportCheckpointVideosPageState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Review each video and enter its workout details. Originals stay intact; a separate copy is stored on this device. Only metadata syncs.',
+                      Text(
+                        provider.metadataIsLocal
+                            ? 'Review each video and enter its workout details. This PC saves links to the originals without copying or uploading them. Keep the originals for playback.'
+                            : 'Review each video and enter its workout details. Originals stay intact; a separate copy is stored on this device. Only metadata syncs.',
                       ),
                       const SizedBox(height: 12),
                       Wrap(

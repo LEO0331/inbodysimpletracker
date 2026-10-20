@@ -55,7 +55,9 @@ add_subdirectory("runner")
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
-include(flutter/generated_plugins.cmake)
+# Windows opens only local checkpoints. Its Files picker uses Dart FFI; native
+# cloud/Health plugins are unused and must not be linked into this local build.
+set(PLUGIN_BUNDLED_LIBRARIES)
 
 
 # === Installation ===

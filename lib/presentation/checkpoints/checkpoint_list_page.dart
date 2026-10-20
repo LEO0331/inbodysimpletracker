@@ -43,8 +43,12 @@ class _CheckpointListPageState extends State<CheckpointListPage> {
     );
     if (saved == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Checkpoint saved. Video stored locally.'),
+        SnackBar(
+          content: Text(
+            provider.metadataIsLocal
+                ? 'Checkpoint saved. Original video linked without copying.'
+                : 'Checkpoint saved. Video stored locally.',
+          ),
         ),
       );
     }
@@ -68,7 +72,11 @@ class _CheckpointListPageState extends State<CheckpointListPage> {
         .toList();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Training Checkpoints'),
+        title: Text(
+          provider.metadataIsLocal
+              ? 'Local Training Checkpoints'
+              : 'Training Checkpoints',
+        ),
         actions: [
           IconButton(
             tooltip: 'Import videos',

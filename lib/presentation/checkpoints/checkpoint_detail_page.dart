@@ -31,12 +31,15 @@ class _CheckpointDetailPageState extends State<CheckpointDetailPage> {
 
   Future<void> _delete() async {
     if (_deleting) return;
+    final metadataIsLocal = context.read<CheckpointProvider>().metadataIsLocal;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete checkpoint?'),
-        content: const Text(
-          'This removes the checkpoint metadata and its locally stored video from this device.',
+        content: Text(
+          metadataIsLocal
+              ? 'This removes the checkpoint record. The original linked video is kept.'
+              : 'This removes the checkpoint metadata and its locally stored video from this device.',
         ),
         actions: [
           TextButton(

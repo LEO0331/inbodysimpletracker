@@ -9,9 +9,9 @@ import sys
 
 PRIVATE_DIRECTORIES = {
     "apple_health_export", "private_health_data", "training_videos",
-    "healthbackup", "health_backups",
+    "healthbackup", "health_backups", ".local",
 }
-PRIVATE_NAMES = {"export.xml", "export_cda.xml", "export.zip"}
+PRIVATE_NAMES = {"export.xml", "export_cda.xml", "export.zip", "checkpoints.json"}
 PRIVATE_SUFFIXES = {
     ".healthbackup",
     ".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm", ".3gp",

@@ -3,6 +3,9 @@ import 'package:file_picker/file_picker.dart';
 import '../../core/utils/checkpoint_validation.dart';
 
 class LocalVideoService {
+  // Native callers inject a directory provider. Web never opens local storage.
+  LocalVideoService({Object? documentsDirectory});
+
   bool get isSupported => false;
 
   Future<List<PlatformFile>> scanDirectory(String path) async =>

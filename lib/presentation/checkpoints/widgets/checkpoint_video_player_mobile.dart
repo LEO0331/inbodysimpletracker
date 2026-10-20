@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 class CheckpointVideoPlayer extends StatefulWidget {
@@ -24,7 +25,7 @@ class _CheckpointVideoPlayerState extends State<CheckpointVideoPlayer> {
   @override
   void initState() {
     super.initState();
-    _initialize();
+    if (!Platform.isWindows || widget.controllerFactory != null) _initialize();
   }
 
   @override
@@ -32,7 +33,9 @@ class _CheckpointVideoPlayerState extends State<CheckpointVideoPlayer> {
     super.didUpdateWidget(oldWidget);
     if (widget.path != oldWidget.path ||
         widget.controllerFactory != oldWidget.controllerFactory) {
-      _initialize();
+      if (!Platform.isWindows || widget.controllerFactory != null) {
+        _initialize();
+      }
     }
   }
 
@@ -134,6 +137,33 @@ class _CheckpointVideoPlayerState extends State<CheckpointVideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
+    if (Platform.isWindows && widget.controllerFactory == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FilledButton.icon(
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('Play in Windows video player'),
+            onPressed: () async {
+              try {
+                await const MethodChannel(
+                  'inbody/local_video',
+                ).invokeMethod<void>('open', widget.path);
+              } catch (_) {
+                if (mounted) {
+                  setState(
+                    () => _error =
+                        'Unable to open the video. Check that a Windows video player is installed.',
+                  );
+                }
+              }
+            },
+          ),
+          const Text('Playback opens in your default Windows video player.'),
+          if (_error != null) Text(_error!),
+        ],
+      );
+    }
     final controller = _controller;
     if (_error != null || controller?.value.hasError == true) {
       return Padding(
