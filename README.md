@@ -1,5 +1,8 @@
 # InBody Simple Tracker
 
+Documentation reviewed: **2026-10-20**. See [data storage and privacy](docs/data-storage-privacy.md)
+for platform boundaries, backup behavior, and the repository audit limits.
+
 A Flutter application for tracking InBody fitness reports, cloud storage, and analytics dashboard. Users can scan, upload or input InBody reports, extract metrics automatically, and track their fitness progress over time.
 
 ## 🎯 Features
@@ -75,12 +78,13 @@ local databases, backups and videos. No real Health data is bundled with this ap
 
 ### Training Checkpoints
 
-Open **Training Checkpoints** from the signed-in home page or drawer. Add an
+On iOS/Android, open **Training Checkpoints** from the signed-in home page or drawer. Add an
 existing MP4/MOV video through the system Files picker (including iPhone Files /
 Downloads), then record the date, exercise, side, camera angle, optional load and
 unit, sets, reps, RPE (1–10), and notes. History shows newest first, with exercise,
 side, and All / last 3 months / last 6 months filters. Open a checkpoint to play,
 pause, or seek its video; confirm deletion to remove the managed video and metadata.
+Windows opens its separate local checkpoint history directly at startup.
 
 Use **Import videos** in the checkpoint toolbar to choose a folder or select
 multiple MP4/MOV/M4V files. Folder scanning includes direct regular files only;
@@ -103,7 +107,9 @@ Use **Import videos** to select local clips or a folder. Windows stores a link t
 each original video without copying it; this mode never syncs metadata to Firebase. The
 default store is `%APPDATA%/InBodySimpleTracker/checkpoints`, configurable at build
 time with `--dart-define=LOCAL_CHECKPOINT_DIRECTORY=<absolute-private-directory>`.
-`checkpoints.json` stores record details and device-only video links.
+`checkpoints.json` stores record details and device-only video links in plaintext.
+This is local storage, not the encrypted Health vault. Protect it with normal
+Windows account and disk access controls; there is no automatic record backup.
 Playback opens the local file in the default Windows video player. Native codec
 support depends on that player. Moving or deleting an original makes playback
 unavailable, while the checkpoint record stays intact. Deleting a linked checkpoint
@@ -125,7 +131,7 @@ through `CheckpointProvider(maxVideoBytes: ...)`; the copied file's actual size 
 checked as well as the picker metadata. Existing historical values remain readable.
 
 **Training video files are stored locally on the device and are not uploaded to
-Firebase or included in the repository.** On save, the selected file is copied
+Firebase or included in the repository.** On iOS/Android save, the selected file is copied
 into the application's documents directory under
 `training_videos/{checkpointId}/{sanitizedFilename}`. Metadata stores a relative
 reference; playback resolves it against the current app directory rather than
@@ -136,15 +142,19 @@ and deletion require the managed directory to match the checkpoint ID. Unsupport
 malformed, or foreign references are treated as unavailable and cannot delete another
 checkpoint's video.
 
-Checkpoint metadata is cloud-synced through
+Mobile checkpoint metadata is cloud-synced through
 `users/{uid}/checkpoints/{checkpointId}`. Existing `users/{uid}/reports/{reportId}`
 data is unchanged. Firestore access rules must allow the signed-in owner to read,
 create, and delete their checkpoints (the deployed rules are not included in this
-repository). No Firebase Storage or video binary/base64 is used.
+repository). Windows metadata stays in its local JSON store. No Firebase Storage
+or video binary/base64 is used.
 
 Limitations:
 
-- Uninstalling the application may remove locally stored videos.
+- Uninstalling the mobile application may remove its managed video copies.
+- Windows links depend on the original file path. Moving/deleting a video leaves
+  the record intact but makes playback unavailable. Deleting a Windows checkpoint
+  preserves the original. Relinking and automatic backup are not implemented.
 - Videos are not automatically available on another device. Missing local videos
   display **"Video is not available on this device."** Metadata syncing does not
   synchronize video files. Deletion on another device cannot remove the original
@@ -224,6 +234,10 @@ and temporary byte files and cannot verify native codecs or Files provider behav
 - ✅ **Navigation** - Smooth routing between pages with proper state management
 
 ## 📱 Screenshots & User Flow
+
+The diagram below describes the cloud report UI on mobile/web. Windows instead
+opens Local Training Checkpoints directly. Private Health uses its independent
+entry and native validation gate described above.
 
 ```
 HomePage (Landing Page)
@@ -331,8 +345,8 @@ See `pubspec.yaml` for complete dependencies list.
 ### Prerequisites
 - Flutter 3.44+ installed
 - Dart 3.12+ SDK
-- Firebase project set up
-- iOS/Android development environment
+- Firebase project set up for cloud features on mobile/web
+- iOS/Android development environment, or Visual Studio C++ desktop tools for Windows
 
 ### Installation
 
@@ -362,6 +376,15 @@ See `pubspec.yaml` for complete dependencies list.
    ```bash
    flutter run
    ```
+
+For Windows local checkpoints, use `flutter run -d windows` or
+`flutter build windows --release`. Firebase setup is not required for this mode.
+To store local records under a chosen private folder, add
+`--dart-define=LOCAL_CHECKPOINT_DIRECTORY=<absolute-private-directory>` to the
+build/run command. Use the same value when running the opt-in import tool.
+The Files picker uses Dart FFI; cloud and Health native plugins are excluded from
+the local Windows runner. Flutter tooling can still require plugin-link privileges
+on the build host. No private store is declared as a Flutter asset.
 
 ## 📋 Core Components
 
@@ -470,6 +493,7 @@ users/
 | Android | ✅ Supported | Full OCR support |
 | iOS | ✅ Supported | Full OCR support |
 | Web | ✅ Supported | Manual input only (OCR fallback) |
+| Windows | Local checkpoints | Local JSON, original-file links, external Windows playback; no cloud/Health UI |
 
 ## 🔄 Data Flow
 
@@ -627,7 +651,7 @@ flutter pub run build_runner build
 - [Mockito Package](https://pub.dev/packages/mockito)
 - [Flutter Unit Testing Best Practices](https://codewithandrea.com/articles/flutter-testing/)
 
-**Last Updated**: March 2026  
+**Last Updated**: October 20, 2026
 **Test Framework Version**: Flutter Test Framework  
 **Target Coverage**: >85%
 
@@ -637,6 +661,9 @@ flutter pub run build_runner build
 - **Web Demo**: [InBody Simple Tracker](https://leo0331.github.io/inbodysimpletracker/) 
 
 ### 📸 UI Gallery
+These are historical demo screenshots, not evidence of the current Windows UI.
+The sample report is labeled Jane Doe and the account screenshots use test labels.
+Never replace these assets with personal training videos or private exports.
 ### 1. Login/Signup
 ![Demo7](assets/images/demo7.png)
 ![Demo8](assets/images/demo8.png)

@@ -1,5 +1,14 @@
 # Local Health implementation and native release gates
 
+Documentation reviewed: **2026-10-20**. Test counts below describe their original
+implementation milestones; they are not fresh device-validation claims.
+
+The Windows local checkpoint app is a separate feature: it stores plaintext JSON
+and links original videos without copying or uploading them. It does not expose
+the mobile Health vault, enable `HEALTH_VAULT_VERIFIED`, or include checkpoints in
+Health backups. Windows build/playback success does not prove native Health
+encryption, protection or HealthKit behavior. See [data storage and privacy](data-storage-privacy.md).
+
 The implementation is an experimental native recorder, developed with synthetic
 records only. No personal Apple Health exports are source assets or test fixtures.
 The private planning notes stay in ignored `.omx/plans/`.

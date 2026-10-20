@@ -1,143 +1,75 @@
 # InBody Simple Tracker - 系統設計審查（繁體中文）
 
-## 1. 範圍與目的
-本文件針對目前 repo 內實作進行系統設計審查，重點包含：
-- 架構設計
-- 主要取捨（tradeoff）
-- 資料結構選型原因與替代方案
-- 深度追問（deep dive）準備題
+審查日期：2026-10-20。本文件描述儲存庫內程式碼，不代表已部署服務或原生裝置驗證已通過認證。
 
-本文件僅為設計審查，不改動執行行為。
+## 1. 範圍與審查狀態
 
-## 2. 高階架構
-目前是輕量分層 Flutter 架構：
+本應用程式包含三個獨立資料領域：雲端 InBody 報告、依平台採不同儲存方式的訓練檢查點，以及獨立且僅支援行動裝置的私人 Health 資料庫。描述儲存與驗證行為時，必須指明資料領域與平台。
 
-- Presentation 層（`lib/presentation/*`）
-  - Auth/Home/Upload/Dashboard/Admin 頁面與元件。
-- State 層（`lib/logic/providers/*`）
-  - `AuthProvider`、`ReportProvider`、`MqttProvider`（`ChangeNotifier`）。
-- Service 層（`lib/data/services/*`, `lib/core/services/*`）
-  - `AuthService`、`FirestoreService`、`FileService`（OCR/PDF 擷取）。
-- Domain Model（`lib/data/models/*`）
-  - `InbodyReport` 作為核心資料模型。
-- 外部系統
-  - Firebase Auth
-  - Cloud Firestore
-  - MQTT broker（`broker.emqx.io`）
-  - OCR 引擎（原生 ML Kit + Web Tesseract.js）
+本審查的早期版本以報告匯入為主，並假設每次啟動都初始化 Firebase；此假設已不適用於 Windows。早期關於 MQTT 一致性與 broker 信任的討論保留為設計背景，不能用來證明公共 broker 已啟用，或部署環境已完成稽核。
 
-## 3. 主要執行流程（Data Flow）
-### 3.1 驗證流程
-1. 啟動時初始化 Firebase 與 Web persistence。
-2. `AuthProvider` 監聽 auth state。
-3. `AuthService` 讀取 `users/{uid}` 的 role。
-4. UI 依登入狀態切換入口與功能。
+## 2. 架構與邊界
 
-### 3.2 報告匯入流程（上傳/OCR/PDF）
-1. 使用者選檔（圖片/PDF）。
-2. `FileService` 擷取文字：
-   - Web：JS interop OCR
-   - Native：ML Kit OCR
-   - PDF：Syncfusion 抽字
-3. `InbodyParser` 用 regex 轉換為指標。
-4. 轉成 `InbodyReport`。
-5. 寫入 Firestore `users/{uid}/reports`。
+- 頁面位於 `lib/presentation/`；`lib/logic/providers/` 內的 Provider 使用 `ChangeNotifier`。
+- 報告服務涵蓋身分驗證、Firestore、OCR/PDF 文字擷取、解析與選用的 MQTT 整合。
+- `TrainingCheckpoint` 儲存選定的訓練日期、動作、側別、拍攝角度、選填重量與單位、組數、次數、RPE、備註、本機影片參照、原始檔名、檔案資訊、選填 SHA-256 指紋及紀錄時間。
+- `CheckpointProvider` 可使用儲存 Firestore 中繼資料的 `CheckpointService`，或僅儲存本機 JSON 的 `LocalCheckpointService`。
+- Windows 注入 `LinkedLocalVideoService`；行動裝置使用受應用程式管理的本機影片副本。兩種檢查點流程都不會將影片內容上傳至 Firestore。
+- `HealthProvider` 與 `EncryptedHealthRepository` 構成獨立的本機 Health 領域，不依賴雲端帳號或雲端 UID。
 
-### 3.3 Dashboard 流程
-1. 訂閱 Firestore snapshot stream。
-2. map 成 `List<InbodyReport>`。
-3. Client 端日期篩選（All/3M/6M）。
-4. 圖表與歷史清單渲染。
+## 3. 執行資料流程
 
-### 3.4 MQTT 即時流程
-1. Dashboard 以 user topic 初始化 MQTT。
-2. 收到 JSON 後轉為 `InbodyReport`。
-3. 先進記憶體 `mqttReports`。
-4. 同步持久化到 Firestore。
+### 3.1 Windows 本機檢查點
 
-## 4. 架構審查與取捨
-## 優點
-- UI / Provider / Service / Model 分層清楚，落地速度快。
-- 多處支援 DI，測試可控度高。
-- Firestore stream + MQTT 提供即時體驗。
-- OCR 跨平台策略明確且可維護。
+1. Windows 上的 `BootstrapApp` 直接開啟 `LocalCheckpointEntryPage`。此入口不初始化 Firebase，也不要求登入。
+2. `LocalCheckpointService` 讀寫 `checkpoints.json`。目錄可透過編譯期 `LOCAL_CHECKPOINT_DIRECTORY` 定義指定；未指定時使用 `%APPDATA%/InBodySimpleTracker/checkpoints`，若無 `APPDATA`，則以目前目錄作為基底。
+3. 選擇影片後，以 `linked-file:` 記錄原始檔案的本機絕對路徑。新匯入不複製影片；來源可位於任何支援的本機資料夾，不要求固定的 gym 資料夾。
+4. 播放時開啟 Windows 預設影片播放器。移動、重新命名或刪除原始檔案會使播放不可用，但檢查點中繼資料仍保留。
+5. 刪除連結式檢查點只移除其中繼資料，保留原始影片。舊的受管理影片參照仍可讀取；其副本刪除行為與連結原始檔案不同。
+6. Windows 檢查點中繼資料保留於本機 JSON，不會透過此流程同步至 Firestore。
 
-## 取捨與限制
-- `ChangeNotifier` 簡單但擴張性有限：
-  - 現階段足夠
-  - 非同步互動變複雜時可讀性下降
-- 狀態來源混合：
-  - 有 `ReportProvider`，但 Dashboard 直接接 Firestore stream
-  - 造成兩種 state 風格並存
-- 一致性風險：
-  - MQTT 與手動上傳可能同時寫入，可能重複
-  - At-least-once 語意下缺 dedup 會放大問題
-- 解析穩健性：
-  - Regex 快且透明，但對 OCR 噪聲/版型變化敏感
-- 運維耦合：
-  - 公共 MQTT broker 上手快，但資料信任邊界較弱
+### 3.2 行動裝置檢查點與 Web 限制
 
-## 5. 為何選這些資料結構？替代方案是什麼？
-| 現行選擇 | 為何現在適合 | 代價 | 替代方案 | 何時切換 |
-|---|---|---|---|---|
-| Firestore 路徑 `users/{uid}/reports/{reportId}` | 租戶隔離直觀、單使用者查詢簡單 | 跨使用者分析不易 | 全域 `reports` + `uid` 欄位；事件流儲存 | 需要跨使用者營運分析時 |
-| `InbodyReport` 不可變模型 | DB/UI 邊界型別清楚 | 手寫 mapping 成本 | `freezed/json_serializable` codegen | 模型數量擴大、演進頻繁時 |
-| 解析中介用 `Map<String,dynamic>` | 彈性高、開發快 | 型別安全弱、key typo 風險 | `ParsedMetrics` typed DTO | Parser 複雜度提高時 |
-| `List<InbodyReport>` 歷史資料容器 | 小中量資料下渲染直覺 | 大量資料時記憶體與篩選成本上升 | 分頁、cursor、區間載入 | 單使用者報告量大幅成長時 |
-| `Stream<List<InbodyReport>>` 即時訂閱 | Realtime UX 成本低 | 讀取費用與 UI churn 可能增加 | 批次查詢 + 手動刷新；cache-first | 需嚴控成本/離線策略時 |
-| Regex (`RegExp`) 解析 OCR 文本 | 可解釋、可快速調整 | 對版型/語言變化脆弱 | 規則引擎（含 confidence）、模板匹配、ML parser | OCR 來源多樣化後 |
-| MQTT topic `inbody/users/{uid}/data` | 路由模型簡單 | 安全性依賴 broker ACL | 私有 broker、簽章訊息、IAM pub/sub | 進入正式高信任需求時 |
+雲端檢查點流程將中繼資料儲存於 `users/{uid}/checkpoints/{checkpointId}`。iOS/Android 匯入時，會將影片複製至應用程式文件目錄內的 `training_videos/{checkpointId}/{filename}`，並於中繼資料中儲存本機參照。影片內容留在該裝置；其他裝置取得中繼資料時，不會自動取得影片。Web 不支援影片匯入。
 
-## 6. 深度追問（Deep Dive）準備題
-## 架構與邊界
-1. 為什麼這個專案用 Provider/ChangeNotifier，而不是 Riverpod/BLoC？
-2. UI、Provider、Service 的邊界如何避免耦合？
-3. 為什麼 Dashboard 直接用 StreamBuilder 而不是統一走 `ReportProvider`？
+匯入與覆核表單僅收集欄位，不會自動分析動作技術、計算次數或評分姿勢。備註是人工觀察；SHA-256 指紋用於重複匯入偵測，不是動作分析。
 
-## 一致性與正確性
-4. MQTT 與手動上傳同時發生時，如何避免重複報告？
-5. 目前的 idempotency 策略是什麼？
-6. 如何處理 MQTT 訊息延遲/亂序？
+### 3.3 雲端報告
 
-## 資料模型與儲存
-7. 為什麼採用 user 子集合，而不是全域 reports？
-8. 若要做全站分析，怎麼不破壞現有熱路徑？
-9. Firestore index 與查詢模式要如何隨需求擴充？
+Windows 入口以外的雲端啟動流程會初始化 Firebase；Web 使用工作階段身分驗證持續性。報告流程依序選取圖片/PDF、擷取文字、解析為 `InbodyReport`，再寫入 Firestore 使用者報告。Dashboard 的報告訂閱與選用 MQTT 整合屬於此雲端領域，不屬於 Windows 檢查點儲存區或私人 Health 資料庫。
 
-## 可靠性與失敗情境
-10. OCR 失敗或部分解析時，降級策略是什麼？
-11. MQTT broker 不可用時，UX 與資料流如何退化？
-12. 目前是否有重試/backoff 策略？
+### 3.4 私人 Health
 
-## 安全與信任
-13. 使用公共 MQTT broker 的信任假設是什麼？
-14. Firebase Security Rules 應如何保證讀寫隔離？
-15. 如何驗證 MQTT payload 的來源可信度？
+私人 Health 透過 SQLCipher、裝置保護金鑰、原生目錄保護與加密備份，在 iOS/Android 儲存資料。Windows/Web 不提供此資料庫後端。`HEALTH_VAULT_VERIFIED` 預設為 false；個人資料匯入、HealthKit 更新、備註寫入及還原仍受原生裝置驗證開關限制。此開關與檢查點可用性獨立，不能僅因程式碼存在或桌面測試通過就宣稱驗證完成。
 
-## 效能與成本
-16. Firestore 成本主因在哪些讀寫路徑？
-17. 如何抑制高頻更新造成的畫面 churn？
-18. 何時要導入分頁與圖表視窗化？
+## 4. 儲存與隱私取捨
 
-## 演進與維運
-19. 若要轉 offline-first，第一步會改哪層？
-20. 若新增更多生理指標，schema 與 parser 如何安全演進？
+| 資料領域 | 儲存位置 | 主要限制 |
+|---|---|---|
+| Windows 檢查點中繼資料 | 本機 JSON | 明文本機檔案，含檔名、來源絕對路徑、備註與指紋；不是 Health 類型的加密資料庫 |
+| Windows 檢查點影片 | 原始本機檔案 | 新增儲存量小，但播放依賴來源檔案可存取 |
+| 行動裝置檢查點中繼資料 | 使用者 Firestore 子集合 | 中繼資料同步屬雲端操作；影片留在本機不代表所有中繼資料也只在本機 |
+| 行動裝置檢查點影片 | 應用程式文件目錄內的受管理副本 | 額外占用裝置空間；影片不會隨中繼資料傳至另一裝置 |
+| 私人 Health | 獨立加密行動資料庫與明確建立的加密備份 | 需要原生驗證與保護金鑰可用；不自動同步雲端 |
+| InBody 報告 | 雲端 Firestore | 具有獨立的雲端資料與存取控制考量 |
 
-## 7. 回答框架建議（面對深挖時）
-- 先講需求壓力（時程、團隊規模、上市速度）。
-- 說明當前設計是「刻意簡化 + 可測試」。
-- 明講已知限制（重複寫入風險、parser 脆弱性、broker 信任）。
-- 再給遷移路線而非純批評：
-  - 統一報告 state 取得模式
-  - 寫入加 idempotency key
-  - parser 加 confidence + 人工覆核流程
-  - MQTT 遷移到私有且有驗證的 broker
-  - 導入分頁與成本保護欄位
+Git 隱私與執行時隱私是不同邊界。個人紀錄、匯入影片、Health 匯出、備份及本機執行檔案應排除於受追蹤原始碼之外。忽略規則可避免新增檔案遭意外加入，但不會刪除過去已提交的歷史。儲存庫與隱私稽核結果須另附實際證據；本設計審查本身無法證明 GitHub 沒有敏感資料。
 
-## 8. 優先建議（設計層）
-1. 報告資料流統一一種狀態編排策略（Provider 或封裝 stream abstraction）。
-2. 增加 dedup/idempotency key（例如內容 hash + source + 時間桶）。
-3. MQTT JSON 寫入前加 schema 驗證。
-4. parser 回傳 confidence，避免低品質資料默默入庫。
-5. 定義 ingestion latency / dashboard freshness 的 SLO/SLA。
+## 5. 設計選擇與待釐清事項
+
+- Provider/Service 注入讓本機與雲端儲存重用檢查點表單，不需第二套檢查點模型。
+- 本機 JSON 讓 Windows 部署保持輕量，但沒有帳號隔離、加密或自動跨裝置同步。寫入僅於服務實例內序列化，不是多程序資料庫。
+- 連結原始檔案避免重複儲存，但明確依賴來源可用性。未來若加入重新連結功能，應保留紀錄並重新確認檔案身分。
+- SHA-256 去重適用於檢查點匯入，不代表報告/MQTT 匯入已有冪等機制。
+- 既有報告議題仍值得審查：OCR 變化下的解析容錯、報告狀態編排、MQTT 內容驗證與信任、寫入冪等性，以及分頁與讀取成本。這些是審查問題，不代表已觀察到特定故障。
+
+## 6. 審查優先事項
+
+1. 在介面與文件中明確說明各平台的儲存與刪除行為。
+2. 發布前檢查儲存庫內容與可達歷史；範例不可提交個人測試資料或真實來源路徑。
+3. 新增匯出、備份或同步時，維持 Windows 檢查點與私人 Health 的資料邊界。
+4. 啟用私人 Health 驗證開關前，完成原生裝置驗證證據。
+5. 報告匯入與 MQTT 可靠性應獨立於檢查點儲存變更評估。
+
+程式碼參照：`lib/main.dart`、`lib/data/models/training_checkpoint.dart`、`lib/data/services/local_checkpoint_service.dart`、`lib/data/services/linked_local_video_service.dart`、`lib/data/services/checkpoint_service.dart`、`lib/data/services/local_video_service_mobile.dart`、`lib/presentation/checkpoints/widgets/checkpoint_video_player_mobile.dart`、`lib/logic/providers/health_provider.dart` 與 `lib/data/services/health_store_mobile.dart`。此次文件更新不宣稱另有執行測試、部署或裝置驗證。
 

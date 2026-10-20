@@ -1,4 +1,16 @@
-# Dependency security review — 2026-10-05
+# Dependency security review
+
+Documentation reviewed: **2026-10-20**. The dependency audit below was performed
+on **2026-10-05**; advisory counts are historical, not current live scan results.
+The Windows checkpoint feature added no dependencies. It uses the installed Files
+picker's Dart FFI implementation and excludes unused cloud/Health native plugins
+from the Windows runner. Mobile/web dependency behavior requires its own checks.
+
+The 2026-10-20 repository privacy audit is documented in
+[data storage and privacy](data-storage-privacy.md). Credential-pattern inspection
+and private-asset checks are separate from npm/Dependabot vulnerability analysis.
+
+## Historical dependency audit: 2026-10-05
 
 Reviewed the 14 open repository Dependabot alerts against both npm lockfiles.
 Run audits with network access: an offline/cached audit returned a misleading

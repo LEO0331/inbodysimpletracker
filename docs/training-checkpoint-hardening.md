@@ -1,5 +1,28 @@
 # Training checkpoint hardening review
 
+Documentation reviewed: **2026-10-20**. The original hardening review below is a
+historical mobile/cloud implementation record; its test counts are historical.
+
+## Current Windows extension
+
+Windows now opens a device-only checkpoint history without Firebase sign-in.
+`LocalCheckpointService` stores plaintext `checkpoints.json`; its default folder
+is `%APPDATA%/InBodySimpleTracker/checkpoints`, configurable with
+`LOCAL_CHECKPOINT_DIRECTORY` at build time. `LinkedLocalVideoService` links the
+original local file without copying it. Playback opens the Windows default player.
+Moving/deleting a source makes playback unavailable but preserves the record;
+deleting a linked checkpoint never deletes its source. This service is separate
+from the mobile managed-copy service and is never used for cloud checkpoints.
+
+The Windows extension was checked with 62 affected Flutter tests, static analysis,
+Windows and Web builds, repeat-import checks, and a native playback spot check.
+These do not constitute physical iOS/Android or native Health validation.
+See [data storage and privacy](data-storage-privacy.md) for audit scope and the
+historical runtime-log finding. The mobile hardening results below remain useful
+within their original scope.
+
+## Historical mobile hardening review
+
 Reviewed implementation commit `a683f704da18777ec7d80b9fa0c51d1a24ee2dd9`
 against its parent before making repairs. Scope: reliability of the existing
 checkpoint feature; no new recording, analysis, upload, or comparison features.

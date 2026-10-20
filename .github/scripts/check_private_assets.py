@@ -9,7 +9,7 @@ import sys
 
 PRIVATE_DIRECTORIES = {
     "apple_health_export", "private_health_data", "training_videos",
-    "healthbackup", "health_backups", ".local",
+    "healthbackup", "health_backups", ".local", ".omx",
 }
 PRIVATE_NAMES = {"export.xml", "export_cda.xml", "export.zip", "checkpoints.json"}
 PRIVATE_SUFFIXES = {

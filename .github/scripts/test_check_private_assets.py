@@ -15,6 +15,7 @@ class PrivateAssetTests(unittest.TestCase):
             "db/health.db-wal", "db/health.sqlite-shm", "assets/video.MOV",
             "assets/a83f.healthbackup",
             ".local/checkpoints/checkpoints.json", "assets/checkpoints.json",
+            ".omx/logs/session.jsonl", ".omx/state/session.json",
         ]:
             with self.subTest(path=path):
                 self.assertTrue(is_private_path(path))
