@@ -1,5 +1,46 @@
 # Dependency security review
 
+## Current Dependabot review: 2026-11-02
+
+Reviewed all six open alerts on GitHub and traced their dependency call sites.
+
+| Alerts | Package | Decision |
+| --- | --- | --- |
+| #239, #233 | body-parser | Fixed: root lockfile now resolves 1.20.9 and 2.4.0. Firebase CLI emulator middleware enables compressed body parsing, making the vulnerable path reachable. Also updated the Functions copy to 2.4.0. |
+| #243, #237 | minimatch | No fix needed for current usage: neither the app nor the signup function accepts untrusted glob patterns. CLI patterns come from internal strings or trusted project configuration; Functions copies come through ESLint and Firestore's tooling dependencies. |
+| #242, #236 | glob | No fix needed for current usage: inspected CLI glob calls do not use AbortSignal cancellation. The Functions copy comes through Firestore / google-gax / rimraf, with no application traversal or cancellation budget. |
+
+The minimatch advisory requires attacker-controlled patterns with optimization
+level 2 or higher. The glob advisory concerns traversal continuing after signal
+cancellation. Reassess these decisions if untrusted patterns, user-controlled
+directory trees, or cancellation-based glob traversal budgets are introduced.
+The current deployed function is an Authentication signup background trigger,
+with no HTTP endpoint or glob operations. The Flutter Pages build uses neither
+npm tree. No alerts were dismissed on GitHub.
+
+Only compatible body-parser updates and their required transitive dependencies
+were changed; no cross-major glob/minimatch overrides were added.
+
+Verification on Node 24.14.0 (the Functions deployment target remains Node 20):
+
+- Functions signup regression test and ESLint passed.
+- Local HTTP smoke checks passed for all three resolved body-parser copies:
+  valid gzip JSON, gzip with trailing bytes, and a subsequent valid request;
+  the processes remained alive.
+- Firebase CLI startup returned version 15.32.1.
+- Both lockfiles contain only patched body-parser versions; git diff checks passed.
+- Live Functions npm audit reported no high/critical vulnerabilities and only
+  the reviewed minimatch/glob advisories and their dependent packages.
+- Full root npm audit was omitted at the user's request. The listed alerts were
+  checked directly against public advisories. No deployment was performed.
+
+Sources:
+- [body-parser compressed request denial of service](https://github.com/advisories/GHSA-27r3-jxmh-p828)
+- [minimatch globparts amplification](https://github.com/advisories/GHSA-g3hv-75wg-m249)
+- [glob cancellation bypass](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)
+
+## Earlier review context
+
 Documentation reviewed: **2026-10-20**. The dependency audit below was performed
 on **2026-10-05**; advisory counts are historical, not current live scan results.
 The Windows checkpoint feature added no dependencies. It uses the installed Files
