@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.get('role', '') == 'admin';
+    }
+
+    function isSignupProfile() {
+      let profile = request.resource.data;
+      return profile.keys().hasOnly(['email', 'role', 'createdAt'])
+        && profile.email == request.auth.token.email
+        && profile.role == 'user'
+        && profile.createdAt == request.time;
+    }
+
+    match /users/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(uid) && isSignupProfile();
+
+      // The Auth signup trigger may initialize the same profile first.
+      allow update: if isOwner(uid) && isSignupProfile()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['createdAt']);
+
+      match /reports/{reportId} {
+        allow read, delete: if isOwner(uid) || isAdmin();
+        allow create: if isOwner(uid);
+      }
+
+      match /checkpoints/{checkpointId} {
+        allow read, create, update, delete: if isOwner(uid);
+      }
+    }
+  }
+}

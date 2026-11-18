@@ -119,6 +119,7 @@
 
     window.addEventListener('flutter-first-frame', removeBootScreen);
 
+    const ocrAssets = new URL('ocr/', document.baseURI);
     let tesseractLoadPromise;
     function ensureTesseractLoaded() {
       if (window.Tesseract) {
@@ -129,10 +130,14 @@
       }
       tesseractLoadPromise = new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        script.src = new URL('tesseract.min.js', ocrAssets).href;
         script.async = true;
         script.onload = () => resolve(window.Tesseract);
-        script.onerror = reject;
+        script.onerror = (error) => {
+          script.remove();
+          tesseractLoadPromise = undefined;
+          reject(error);
+        };
         document.head.appendChild(script);
       });
       return tesseractLoadPromise;
@@ -141,10 +146,19 @@
     async function ocrRecognize(base64Image) {
       try {
         const Tesseract = await ensureTesseractLoaded();
-        const worker = await Tesseract.createWorker('eng');
-        const { data: { text } } = await worker.recognize('data:image/png;base64,' + base64Image);
-        await worker.terminate();
-        return text;
+        const worker = await Tesseract.createWorker('eng', Tesseract.OEM.LSTM_ONLY, {
+          workerPath: new URL('worker.min.js', ocrAssets).href,
+          workerBlobURL: false,
+          corePath: ocrAssets.href,
+          langPath: ocrAssets.href,
+          cachePath: 'ocr-5.1.1',
+        });
+        try {
+          const { data: { text } } = await worker.recognize('data:image/png;base64,' + base64Image);
+          return text;
+        } finally {
+          await worker.terminate();
+        }
       } catch (e) {
         console.error('Tesseract OCR error:', e);
         return '';

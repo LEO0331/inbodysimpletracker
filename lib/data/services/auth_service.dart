@@ -18,10 +18,11 @@ class AuthService {
         password: password,
       );
 
-      final String uid = credential.user!.uid;
+      final user = credential.user!;
+      final uid = user.uid;
 
       await _db.collection("users").doc(uid).set({
-        "email": email,
+        "email": user.email ?? email,
         "role": "user",
         "createdAt": FieldValue.serverTimestamp(),
       });
@@ -61,10 +62,8 @@ class AuthService {
       final user = _auth.currentUser;
       if (user == null) return false;
 
-      final doc = await _db.collection("users").doc(user.uid).get();
-      final String? role = doc.data()?['role'] as String?;
-
-      return role == "admin";
+      final token = await user.getIdTokenResult();
+      return token.claims?["role"] == "admin";
     } catch (e) {
       developer.log("isAdmin Check Error: $e", name: "auth.service", error: e);
       return false;

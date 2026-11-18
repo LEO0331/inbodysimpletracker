@@ -45,6 +45,9 @@ encrypted Health backup format. Missing originals cannot be recovered from JSON.
 
 Mobile checkpoint saves copy the original into app Documents at
 `training_videos/{checkpointId}/{sanitizedFilename}`. The source remains untouched.
+The iOS app marks this directory for exclusion from system backups at startup
+and before saving new copies. Copies in older backups follow the retention policy
+of those backups.
 Deleting a checkpoint removes its managed copy and attempts metadata deletion;
 partial failures are reported. Missing device-local videos do not remove cloud
 metadata. Uninstalling may remove managed files; metadata sync does not sync videos.
@@ -101,6 +104,43 @@ that Firebase-only API keys generally are not secrets, while other Google API
 uses require additional restrictions: [Firebase API key guidance](https://firebase.google.com/docs/projects/api-keys).
 The audit did not verify live key restrictions, IAM, App Check or Firestore rules,
 so public configuration must not be interpreted as evidence those controls are correct.
+
+## Firestore rules rollout
+
+`firestore.rules` allows members to access their own reports and checkpoints.
+Administrator access to user profiles and other members' reports requires the
+Firebase Auth custom claim `role: admin`. The profile `role` field is display data.
+
+1. In Firebase Console, review and keep a copy of the current production rules.
+   Compare them with the checked-in rules before replacing them. Verify the
+   existing administrators' UIDs independently of the Firestore role field.
+2. From an authorized operator environment with Application Default Credentials,
+   run `npm --prefix functions ci`, then open `node` from `functions/` and run the
+   following for each verified UID. The update retains other custom claims.
+
+   ```js
+   const admin = require('firebase-admin')
+   admin.initializeApp({ projectId: 'inbodysimpletracker' })
+   const auth = admin.auth()
+   const uid = '<verified administrator UID>'
+   const account = await auth.getUser(uid)
+   await auth.setCustomUserClaims(uid, { ...account.customClaims, role: 'admin' })
+   const role = (await auth.getUser(uid)).customClaims.role
+   role
+   ```
+
+3. From the repository root, run the access-rule test with Node and Java 21.
+
+   ```sh
+   npm ci
+   npx --no-install firebase emulators:exec --only auth,firestore --project demo-inbody-rules "node --test tool/test_firestore_rules.mjs"
+   ```
+
+4. Confirm signup, member report and checkpoint operations, and admin listing,
+   report viewing, and deletion with synthetic accounts in a test project. Then
+   deploy only the rules with `npx --no-install firebase deploy --only firestore:rules --project inbodysimpletracker`
+   before publishing the app update. Existing administrators should sign in again
+   to receive their updated token.
 
 ## Verification
 
