@@ -12,11 +12,30 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Apply the exclusion to videos saved by earlier versions without moving them.
+    try? excludeManagedVideosFromBackup()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let videoChannel = FlutterMethodChannel(
+      name: "inbody/local_video",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    videoChannel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "excludeFromBackup" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      do {
+        guard let self = self else { throw CocoaError(.fileWriteNoPermission) }
+        try self.excludeManagedVideosFromBackup()
+        result(nil)
+      } catch {
+        result(FlutterError(code: "local_video", message: "Unable to exclude training videos from system backups.", details: nil))
+      }
+    }
     healthPrivacyObservers.append(NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
       guard let self = self, self.healthVisible else { return }
       for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
@@ -97,6 +116,20 @@ import UIKit
       default: result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  private func excludeManagedVideosFromBackup() throws {
+    let documents = try FileManager.default.url(
+      for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false
+    )
+    var directory = documents.appendingPathComponent("training_videos", isDirectory: true)
+    let shape = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+    guard shape.isDirectory == true, shape.isSymbolicLink != true else {
+      throw CocoaError(.fileWriteNoPermission)
+    }
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    try directory.setResourceValues(values)
   }
 
   private func protectHealthURL(_ original: URL) throws {

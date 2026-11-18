@@ -59,10 +59,9 @@ void main() {
 
     test('isAdmin handles exception', () async {
       when(() => mockAuth.currentUser).thenReturn(mockUser);
-      when(() => mockUser.uid).thenReturn('uid');
       when(
-        () => mockFirestore.collection(any()),
-      ).thenThrow(Exception("DB Error"));
+        () => mockUser.getIdTokenResult(),
+      ).thenThrow(Exception('Token error'));
 
       final result = await authService.isAdmin();
       expect(result, isFalse);

@@ -41,6 +41,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Prepare verified Web OCR assets
+        run: node tool/prepare_web_ocr.mjs
+
       - name: Build Web (small first-load profile)
         run: |
           flutter build web \

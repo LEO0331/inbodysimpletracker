@@ -12,6 +12,8 @@ class MockUserCredential extends Mock implements UserCredential {}
 
 class MockUser extends Mock implements User {}
 
+class MockIdTokenResult extends Mock implements IdTokenResult {}
+
 class MockFirebaseFirestore extends Mock implements FirebaseFirestore {}
 
 class MockCollectionReference extends Mock
@@ -19,9 +21,6 @@ class MockCollectionReference extends Mock
 
 class MockDocumentReference extends Mock
     implements DocumentReference<Map<String, dynamic>> {}
-
-class MockDocumentSnapshot extends Mock
-    implements DocumentSnapshot<Map<String, dynamic>> {}
 
 void main() {
   late MockFirebaseAuth mockAuth;
@@ -50,6 +49,7 @@ void main() {
       ).thenAnswer((_) async => mockCredential);
       when(() => mockCredential.user).thenReturn(mockUser);
       when(() => mockUser.uid).thenReturn('uid_123');
+      when(() => mockUser.email).thenReturn('test@example.com');
 
       when(() => mockFirestore.collection('users')).thenReturn(mockCollection);
       when(() => mockCollection.doc('uid_123')).thenReturn(mockDoc);
@@ -83,21 +83,18 @@ void main() {
       },
     );
 
-    test('isAdmin should return true for admin role', () async {
-      final mockCollection = MockCollectionReference();
-      final mockDoc = MockDocumentReference();
-      final mockSnapshot = MockDocumentSnapshot();
-
+    test('isAdmin should require an admin token claim', () async {
+      final token = MockIdTokenResult();
       when(() => mockAuth.currentUser).thenReturn(mockUser);
-      when(() => mockUser.uid).thenReturn('uid_123');
-      when(() => mockFirestore.collection('users')).thenReturn(mockCollection);
-      when(() => mockCollection.doc('uid_123')).thenReturn(mockDoc);
-      when(() => mockDoc.get()).thenAnswer((_) async => mockSnapshot);
-      when(() => mockSnapshot.data()).thenReturn({'role': 'admin'});
+      when(() => mockUser.getIdTokenResult()).thenAnswer((_) async => token);
 
-      final isAdmin = await authService.isAdmin();
-
-      expect(isAdmin, isTrue);
+      when(() => token.claims).thenReturn({'role': 'admin'});
+      expect(await authService.isAdmin(), isTrue);
+      when(() => token.claims).thenReturn({'role': 'user'});
+      expect(await authService.isAdmin(), isFalse);
+      when(() => token.claims).thenReturn({});
+      expect(await authService.isAdmin(), isFalse);
+      verifyZeroInteractions(mockFirestore);
     });
 
     test('signOut should call FirebaseAuth signOut', () async {

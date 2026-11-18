@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/utils/checkpoint_validation.dart';
@@ -144,6 +145,11 @@ class LocalVideoService {
       throw StateError('Unsafe local video destination.');
     }
     await destination.parent.create(recursive: true);
+    if (Platform.isIOS) {
+      await const MethodChannel(
+        'inbody/local_video',
+      ).invokeMethod<void>('excludeFromBackup');
+    }
     // Reserve before entering cleanup: a collision never owns the existing file.
     await destination.create(exclusive: true);
     try {

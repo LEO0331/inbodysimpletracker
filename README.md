@@ -377,6 +377,9 @@ See `pubspec.yaml` for complete dependencies list.
    flutter run
    ```
 
+For Web OCR, run `node tool/prepare_web_ocr.mjs` before `flutter run` or
+`flutter build web`. GitHub Pages prepares these assets automatically.
+
 For Windows local checkpoints, use `flutter run -d windows` or
 `flutter build windows --release`. Firebase setup is not required for this mode.
 To store local records under a chosen private folder, add

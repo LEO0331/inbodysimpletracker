@@ -9,7 +9,7 @@ artifact rather than committed to a `gh-pages` branch.
 1. A push to `main` or manual **Run workflow** starts the build job.
 2. Checkout source and read Pages configuration with `actions/configure-pages@v5`.
 3. Run synthetic privacy tests and the tracked-file publication guard.
-4. Install Flutter dependencies and build the release Web app with the project
+4. Install Flutter dependencies, prepare the verified OCR assets, and build the release Web app with the project
    base path `/inbodysimpletracker/`, without source maps or external Web resources.
 5. Remove any remaining source maps and run the guard on `build/web`.
 6. Upload **only** `build/web` with `actions/upload-pages-artifact@v3`, retaining
@@ -21,6 +21,12 @@ artifact rather than committed to a `gh-pages` branch.
 Both jobs share a workflow-level concurrency group, with deployments serialized.
 The existing group name is retained to serialize any older workflow still running
 during migration; its `gh-pages` suffix does not publish or require a branch.
+
+For a local Web run or build, first run `node tool/prepare_web_ocr.mjs` from
+the repository root (Node.js 20 or newer). It verifies the pinned OCR assets
+before writing them to the ignored `web/ocr/` directory. The published app
+loads the OCR engine, worker and English model from its own base path only
+when scanning a report.
 
 ## Repository settings and permissions
 
